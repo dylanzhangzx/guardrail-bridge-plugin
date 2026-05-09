@@ -31,7 +31,7 @@ function resolveFilePath(blacklistFile: boolean | string): string | null {
     return null;
   }
   if (blacklistFile === true) {
-    return path.join(resolveStateDir(), "guardrails", "keywords.txt");
+    return path.join(resolveStateDir(), "guardrail-bridge", "keywords.txt");
   }
   return blacklistFile;
 }
@@ -40,8 +40,10 @@ function resolveFilePath(blacklistFile: boolean | string): string | null {
 function getDefaultKeywordsPath(): string | null {
   const thisDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
+    // Runtime: dist/src/builtin-blacklist-connector.js → ../../assets/keywords.default.txt
+    path.resolve(thisDir, "../../assets/keywords.default.txt"),
+    // Dev/test: src/builtin-blacklist-connector.ts → ../assets/keywords.default.txt
     path.resolve(thisDir, "../assets/keywords.default.txt"),
-    path.resolve(thisDir, "./assets/keywords.default.txt"),
   ];
   return candidates.find((candidate) => existsSync(candidate)) ?? null;
 }
@@ -61,7 +63,7 @@ export function initDefaultKeywordsFile(
 
   if (!sourceFile) {
     logger.warn(
-      "guardrails: default keywords template not found; starting with empty blacklist until a keywords file is provided",
+      "guardrail-bridge: default keywords template not found; starting with empty blacklist until a keywords file is provided",
     );
     return;
   }
@@ -70,10 +72,10 @@ export function initDefaultKeywordsFile(
     const dir = path.dirname(targetPath);
     mkdirSync(dir, { recursive: true });
     copyFileSync(sourceFile, targetPath);
-    logger.info(`guardrails: initialized default keywords file at ${targetPath}`);
+    logger.info(`guardrail-bridge: initialized default keywords file at ${targetPath}`);
   } catch (err) {
     logger.warn(
-      `guardrails: failed to initialize default keywords file at ${targetPath}: ${String(err)}`,
+      `guardrail-bridge: failed to initialize default keywords file at ${targetPath}: ${String(err)}`,
     );
   }
 }
@@ -110,7 +112,7 @@ export function parseKeywordsFile(content: string, logger: Logger): Map<KeywordL
         currentLevel = levelStr as KeywordLevel;
       } else {
         logger.warn(
-          `guardrails: invalid level "[level:${match[1]}]" in keywords file, defaulting to medium`,
+          `guardrail-bridge: invalid level "[level:${match[1]}]" in keywords file, defaulting to medium`,
         );
         currentLevel = "medium";
       }
@@ -139,7 +141,7 @@ function loadKeywordsFile(filePath: string, logger: Logger): Map<KeywordLevel, s
     return parseKeywordsFile(content, logger);
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-      logger.error(`guardrails: failed to read blacklist file ${filePath}: ${String(err)}`);
+      logger.error(`guardrail-bridge: failed to read blacklist file ${filePath}: ${String(err)}`);
     }
     const empty = new Map<KeywordLevel, string[]>();
     for (const level of VALID_LEVELS) {
@@ -202,7 +204,7 @@ export function createBlacklistBackend(
   let automaton = buildAutomaton(getAllKeywords(levelMap), blacklist.caseSensitive);
 
   logger.info(
-    `guardrails: blacklist backend initialized (${automaton.keywordCount} keywords, file: ${filePath ?? "none"})`,
+    `guardrail-bridge: blacklist backend initialized (${automaton.keywordCount} keywords, file: ${filePath ?? "none"})`,
   );
 
   const backendFn: BackendFn = async (
@@ -241,7 +243,7 @@ export function createBlacklistBackend(
       const newLevelMap = loadKeywordsFile(filePath, logger);
       automaton = buildAutomaton(getAllKeywords(newLevelMap), blacklist.caseSensitive);
       logger.info(
-        `guardrails: hot-reloaded blacklist from ${filePath} (${automaton.keywordCount} keywords, ${Date.now() - start}ms)`,
+        `guardrail-bridge: hot-reloaded blacklist from ${filePath} (${automaton.keywordCount} keywords, ${Date.now() - start}ms)`,
       );
     };
 
