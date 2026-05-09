@@ -12,7 +12,7 @@
 # Changes take effect on restart, or immediately with blacklist.hot=true.
 
 [level:critical]
-# Add critical-risk keywords here (uncomment to enable):
+# Add critical-risk keywords here:
 
 [level:high]
 # Add high-risk keywords here (uncomment to enable):
