@@ -1,19 +1,32 @@
 {
-  "name": "@dknownai/openclaw-guardrails",
-  "version": "2026.4.26",
+  "name": "@guardrail-bridge/guardrail-bridge",
+  "version": "1.0.0",
   "private": false,
-  "description": "Pre-agent guardrails plugin for OpenClaw — blacklist, HTTP moderation, and import connectors.",
+  "description": "Pre-agent security plugin for OpenClaw — detects manipulation attempts and blocks policy-violating content before Agent dispatch.",
   "type": "module",
   "license": "MIT",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./api": "./dist/api.js"
+  },
   "files": [
-    "index.ts",
-    "api.ts",
+    "dist/",
     "openclaw.plugin.json",
-    "src/**/*.ts",
-    "!src/**/*.test.ts",
-    "assets/"
+    "assets/",
+    "README-zh.md",
+    "docs/README.md",
+    "docs/README-zh.md",
+    "docs/usage.md",
+    "docs/usage-zh.md",
+    "docs/manifest-schema.md",
+    "docs/manifest-schema-zh.md",
+    "docs/security-notes.md",
+    "docs/security-notes-zh.md"
   ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -22,8 +35,7 @@
     "openclaw": ">=2026.4.26"
   },
   "dependencies": {
-    "@monyone/aho-corasick": "^1.1.8",
-    "jiti": "^2.6.1"
+    "@monyone/aho-corasick": "^1.1.8"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -35,8 +47,11 @@
     "extensions": [
       "./index.ts"
     ],
+    "runtimeExtensions": [
+      "./dist/index.js"
+    ],
     "install": {
-      "npmSpec": "@dknownai/openclaw-guardrails",
+      "npmSpec": "@guardrail-bridge/guardrail-bridge",
       "defaultChoice": "npm",
       "minHostVersion": ">=2026.4.26"
     },

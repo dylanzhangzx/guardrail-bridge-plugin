@@ -1,9 +1,9 @@
 {
-  "id": "guardrails",
-  "name": "Guardrails",
-  "description": "Pre-agent guardrails plugin with blacklist, HTTP, and import connectors.",
+  "id": "guardrail-bridge",
+  "name": "Guardrail Bridge",
+  "description": "Pre-agent guardrail-bridge plugin with blacklist and HTTP connectors.",
   "activation": {
-    "onStartup": false
+    "onStartup": true
   },
   "configSchema": {
     "type": "object",
@@ -11,8 +11,8 @@
     "properties": {
       "connector": {
         "type": "string",
-        "enum": ["", "blacklist", "http", "import"],
-        "description": "Connector type for safety checks. Empty string or omitted = auto-detect from http/import/blacklist fields. Global connector is optional — channels can independently enable Guardrails."
+        "enum": ["", "blacklist", "http"],
+        "description": "Connector type for safety checks. Empty string or omitted = auto-detect from http/blacklist fields. Global connector is optional — channels can independently enable Guardrails."
       },
       "http": {
         "type": "object",
@@ -21,11 +21,11 @@
         "properties": {
           "provider": {
             "type": "string",
-            "description": "HTTP provider name. Built-in: 'openai-moderation', 'dknownai', 'secra', 'hidylan'. Built-in apiKey behavior: 'openai-moderation', 'dknownai', and 'secra' require apiKey; 'hidylan' currently treats apiKey as optional. Custom providers can be registered via registerHttpProvider()."
+            "description": "HTTP provider name. Built-in: 'dknownai', 'dknownai-cn', 'secra', 'hidylan'. Built-in apiKey behavior: 'dknownai', 'dknownai-cn', and 'secra' require apiKey; 'hidylan' currently treats apiKey as optional. Custom providers can be registered via registerHttpProvider()."
           },
           "apiKey": {
             "type": "string",
-            "description": "Provider API key. Required by built-in 'openai-moderation', 'dknownai', and 'secra'; optional for built-in 'hidylan'. Built-in providers choose their own auth header format."
+            "description": "Provider API key. Required by built-in 'dknownai', 'dknownai-cn', and 'secra'; optional for built-in 'hidylan'. Built-in providers choose their own auth header format."
           },
           "apiUrl": {
             "type": "string",
@@ -33,41 +33,13 @@
           },
           "model": {
             "type": "string",
-            "default": "omni-moderation-latest",
-            "description": "Model version. Used by built-in 'openai-moderation'; current built-in 'dknownai', 'secra', and 'hidylan' ignore it."
+            "default": "",
+            "description": "Model version. Current built-in 'dknownai', 'dknownai-cn', 'secra', and 'hidylan' ignore it; custom providers may use it."
           },
           "params": {
             "type": "object",
             "description": "Provider-specific parameters (project_id, region, etc.)",
             "additionalProperties": true
-          }
-        }
-      },
-      "import": {
-        "type": "object",
-        "description": "Import connector configuration",
-        "additionalProperties": false,
-        "properties": {
-          "script": {
-            "type": "string",
-            "description": "Absolute path to the dynamic-import module (.ts/.js)"
-          },
-          "args": {
-            "type": "object",
-            "description": "Custom arguments passed through to the connector",
-            "additionalProperties": true
-          },
-          "hot": {
-            "type": "boolean",
-            "default": false,
-            "description": "Enable hot-reload on file changes"
-          },
-          "hotDebounceMs": {
-            "type": "number",
-            "minimum": 50,
-            "maximum": 5000,
-            "default": 300,
-            "description": "Hot-reload debounce interval in ms"
           }
         }
       },
@@ -84,7 +56,7 @@
       },
       "blockMessage": {
         "type": "string",
-        "default": "This request has been blocked by the guardrails policy."
+        "default": "This request has been blocked by the guardrail-bridge policy."
       },
       "blacklist": {
         "type": "object",
@@ -92,7 +64,7 @@
         "additionalProperties": false,
         "properties": {
           "blacklistFile": {
-            "description": "Keyword file source. true = default path ~/.openclaw/guardrails/keywords.txt; string = custom path; false = disabled.",
+            "description": "Keyword file source. true = default path ~/.openclaw/guardrail-bridge/keywords.txt; string = custom path; false = disabled.",
             "default": false
           },
           "caseSensitive": {
@@ -122,7 +94,7 @@
           "properties": {
             "connector": {
               "type": "string",
-              "enum": ["blacklist", "http", "import"],
+              "enum": ["blacklist", "http"],
               "description": "Override or independently enable a connector for this channel"
             },
             "http": {
@@ -144,17 +116,6 @@
               "properties": {
                 "blacklistFile": { "description": "true, string path, or false" },
                 "caseSensitive": { "type": "boolean" },
-                "hot": { "type": "boolean" },
-                "hotDebounceMs": { "type": "number", "minimum": 50, "maximum": 5000 }
-              }
-            },
-            "import": {
-              "type": "object",
-              "description": "Import connector field-level overrides",
-              "additionalProperties": false,
-              "properties": {
-                "script": { "type": "string" },
-                "args": { "type": "object", "additionalProperties": true },
                 "hot": { "type": "boolean" },
                 "hotDebounceMs": { "type": "number", "minimum": 50, "maximum": 5000 }
               }

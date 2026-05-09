@@ -1,4 +1,4 @@
-# OpenClaw Guardrails — Default keyword list
+# Guardrail Bridge — Default keyword list
 #
 # Format:
 #   [level:critical]  Organizational label for critical-severity keywords
