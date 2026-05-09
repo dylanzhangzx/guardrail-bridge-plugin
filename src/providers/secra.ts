@@ -42,7 +42,7 @@ export function createSecraAdapter(logger: Logger): GuardrailsProviderAdapter {
       timeoutMs: number,
     ): Promise<GuardrailsDecision> {
       if (!config.apiKey) {
-        logger.warn("guardrails: secra provider requires apiKey — falling back");
+        logger.warn("guardrail-bridge: secra provider requires apiKey — falling back");
         return { action: fallbackOnError };
       }
 
@@ -60,7 +60,7 @@ export function createSecraAdapter(logger: Logger): GuardrailsProviderAdapter {
             body: JSON.stringify({ prompt: text }),
           },
           timeoutMs,
-          auditContext: "guardrails:secra",
+          auditContext: "guardrail-bridge:secra",
         });
         release = guarded.release;
         const { response } = guarded;
@@ -90,7 +90,7 @@ export function createSecraAdapter(logger: Logger): GuardrailsProviderAdapter {
         if (!payload?.recommendation) {
           if (response.ok) {
             logger.warn(
-              "guardrails: secra provider response missing recommendation — falling back",
+              "guardrail-bridge: secra provider response missing recommendation — falling back",
             );
           }
           return { action: fallbackOnError };

@@ -72,7 +72,7 @@ export function createHidylanAdapter(_logger: Logger): GuardrailsProviderAdapter
             }),
           },
           timeoutMs,
-          auditContext: "guardrails:hidylan",
+          auditContext: "guardrail-bridge:hidylan",
         });
         release = guarded.release;
         const { response } = guarded;
