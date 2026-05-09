@@ -12,14 +12,7 @@
 # Changes take effect on restart, or immediately with blacklist.hot=true.
 
 [level:critical]
-rm -rf /
-rm -rf /*
-rm --no-preserve-root
-dd if=/dev/zero of=/dev/
-dd if=/dev/urandom of=/dev/
-mkfs /dev/
-:(){ :|:& };:
-> /dev/sda
+# Add critical-risk keywords here (uncomment to enable):
 
 [level:high]
 # Add high-risk keywords here (uncomment to enable):
