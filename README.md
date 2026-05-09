@@ -1,78 +1,246 @@
-# @openclaw/guardrails
+# Guardrail Bridge Plugin
 
-Pre-agent guardrails plugin for [OpenClaw](https://github.com/openclaw/openclaw)：在用户消息进入 Agent 前进行内容检查，匹配命中后阻断并返回提示。
+Pre-agent security plugin for OpenClaw. Detects manipulation attempts and blocks policy-violating content before Agent dispatch.
 
-支持三种检查器（connector）：
+## Compatibility
 
-| Connector   | 用途                                | 关键依赖                                      |
-| ----------- | ----------------------------------- | --------------------------------------------- |
-| `blacklist` | 关键字黑名单（Aho-Corasick 多模匹配） | `@monyone/aho-corasick`                       |
-| `http`      | 远端 HTTP 内容审核 API              | 内置 `openai-moderation` / `dknownai` / `secra` / `hidylan` |
-| `import`    | 动态加载本地脚本（自定义检查器）     | `jiti`                                        |
+- **Supported OpenClaw versions**: `>=2026.4.26`
+- **Supported Plugin API**: `>=2026.4.26`
 
-每个 channel 可独立选择 connector 并覆写参数；全局 connector 可选。
+The packaged runtime is built against OpenClaw `2026.4.26`, and the compatibility metadata is declared in both `peerDependencies.openclaw` and `openclaw.compat.pluginApi`.
 
-## 快速使用
+## Distribution Paths
 
-在 OpenClaw 配置中开启该插件：
+- **ClawHub / OpenClaw install target**: `clawhub:guardrail-bridge`
+- **npm package**: `@guardrail-bridge/guardrail-bridge`
+
+Published archives include the runtime bundle, plugin manifest, assets, and end-user documentation only.
+
+## What It Does
+
+This plugin runs before user messages are dispatched to the Agent and can block requests based on two safety strategies:
+
+- **Blacklist**: Local keyword matching using Aho-Corasick multi-pattern search over a configurable keyword file.
+- **HTTP**: Remote moderation API with built-in providers: `dknownai`, `dknownai-cn`, `secra`, `hidylan`.
+
+Each channel can choose its own connector and override connector options. A global connector is optional.
+
+## HTTP Providers
+
+### DKnownAI
+
+Detects prompt injection, jailbreak, and agent hijacking attempts for deployments that need remote security review.
+
+- **Provider names**: `dknownai` (international), `dknownai-cn` (China)
+- **API key required**: Yes
+- **Website**: [dknownai.com](https://dknownai.com/)
+
+### Secra
+
+Remote content moderation provider for adding extra message safety review.
+
+- **Provider name**: `secra`
+- **API key required**: Yes
+- **Website**: [secra.ai](https://secra.ai/)
+
+### Hidylan
+
+Remote prompt-injection checking provider for identifying unsafe instructions and policy-bypass attempts.
+
+- **Provider name**: `hidylan`
+- **API key required**: Optional
+- **Website**: [hidylan.ai](https://hidylan.ai/)
+
+## Configuration
+
+### Quick Start: Blacklist
+
+Enable the plugin in the OpenClaw config:
 
 ```json5
 {
   plugins: {
     entries: {
-      "@openclaw/guardrails": {
-        connector: "blacklist",
-        blacklist: {
-          blacklistFile: true,        // 默认路径 ~/.openclaw/guardrails/keywords.txt
-          caseSensitive: false,
-          hot: true,                  // 文件变更自动热重载
+      "guardrail-bridge": {
+        enabled: true,
+        config: {
+          connector: "blacklist",
+          blacklist: {
+            blacklistFile: true,
+            caseSensitive: false,
+            hot: true,
+          },
+          blockMessage: "This request has been blocked by the guardrail policy.",
+          fallbackOnError: "pass",
         },
-        blockMessage: "您的请求被安全策略拦截。",
-        fallbackOnError: "pass",     // 出错时放行
       },
     },
   },
 }
 ```
 
-完整字段说明见 [`docs/manifest-schema.md`](./docs/manifest-schema.md) 与 [`openclaw.plugin.json`](./openclaw.plugin.json) 中的 `configSchema`。
+### HTTP Provider Example: DKnownAI
 
-## 项目结构
-
+```json5
+{
+  plugins: {
+    entries: {
+      "guardrail-bridge": {
+        enabled: true,
+        config: {
+          connector: "http",
+          http: {
+            provider: "dknownai",
+            apiKey: "${DKNOWNAI_API_KEY}",
+          },
+          fallbackOnError: "block",
+        },
+      },
+    },
+  },
+}
 ```
-.
-├── index.ts                        # 插件入口，对接 OpenClaw before_dispatch hook
-├── api.ts                          # 公开扩展 API（registerHttpProvider 等）
-├── openclaw.plugin.json            # 插件清单（manifest）+ configSchema
-├── src/
-│   ├── config.ts                   # 配置归一化、共享类型
-│   ├── handler.ts                  # before_dispatch 调度
-│   ├── builtin-blacklist-connector.ts  # 黑名单 connector
-│   ├── http-connector.ts           # HTTP connector + provider 注册表
-│   ├── import-connector.ts         # 动态导入 connector（jiti）
-│   ├── normalize.ts                # 文本归一化（NFC、零宽字符、全半角）
-│   ├── provider-types.ts           # GuardrailsProviderAdapter 接口
-│   └── providers/                  # 内置 HTTP provider 实现
-├── assets/keywords.default.txt     # 默认黑名单
-└── docs/                           # 使用文档与开发参考
+
+### HTTP Provider Example: Secra
+
+```json5
+{
+  plugins: {
+    entries: {
+      "guardrail-bridge": {
+        enabled: true,
+        config: {
+          connector: "http",
+          http: {
+            provider: "secra",
+            apiKey: "${SECRA_API_KEY}",
+          },
+          fallbackOnError: "block",
+        },
+      },
+    },
+  }
+}
 ```
 
-## 开发
+### HTTP Provider Example: Hidylan
+
+```json5
+{
+  plugins: {
+    entries: {
+      "guardrail-bridge": {
+        enabled: true,
+        config: {
+          connector: "http",
+          http: {
+            provider: "hidylan",
+            apiKey: "${HIDYLAN_API_KEY}",
+          },
+          fallbackOnError: "block",
+        },
+      },
+    },
+  }
+}
+```
+
+### Configuring API Keys
+
+There are three ways to provide API keys:
+
+Use provider-specific environment variable names so users can tell connectors apart, for example `DKNOWNAI_API_KEY`, `SECRA_API_KEY`, or `HIDYLAN_API_KEY`.
+
+1. **Environment variable** (recommended):
+
+   ```json5
+   "apiKey": "${DKNOWNAI_API_KEY}"
+   ```
+
+   Set the environment variable before starting OpenClaw:
+   ```bash
+   export DKNOWNAI_API_KEY=sk-...
+   ```
+
+2. **Plain text** (not recommended for production):
+
+   ```json5
+   "apiKey": "sk-..."
+   ```
+
+3. **Per-channel override**:
+
+   ```json5
+   {
+     "guardrail-bridge": {
+       config: {
+         channels: {
+           "discord:@announcements": {
+             connector: "http",
+             http: {
+               provider: "dknownai",
+               apiKey: "${DKNOWNAI_API_KEY}",
+             },
+             blockMessage: "Only compliant content is allowed.",
+           },
+         },
+       },
+     },
+   }
+   ```
+
+### Common Fields
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `connector` | `""` | Connector type: `"blacklist"` or `"http"`. Empty auto-detects from config. |
+| `timeoutMs` | 5000 | Single check timeout in milliseconds (500–30000). |
+| `fallbackOnError` | `"pass"` | Fallback action when a connector fails: `"pass"` or `"block"`. |
+| `blockMessage` | `This request has been blocked by the guardrail-bridge policy.` | Message returned to the user when a request is blocked. |
+
+### Blacklist Configuration
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `blacklistFile` | `false` | Keyword file source. `true` = `~/.openclaw/guardrail-bridge/keywords.txt`; string = custom path; `false` = disabled. |
+| `caseSensitive` | `false` | Enables case-sensitive matching. |
+| `hot` | `false` | Automatically reload the keyword file when it changes. |
+| `hotDebounceMs` | 300 | Hot-reload debounce interval in milliseconds. |
+
+### HTTP Configuration
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `provider` | Yes | Provider name: `dknownai`, `dknownai-cn`, `secra`, or `hidylan`. |
+| `apiKey` | Yes (except `hidylan`) | Provider API key. Can use environment variable substitution. |
+| `apiUrl` | No | Optional endpoint override. |
+| `model` | No | Model name. Current built-in providers ignore this field. |
+| `params` | No | Provider-specific parameters (e.g., `project_id`, `region`). |
+
+## Installation
+
+You can install the plugin through either ClawHub or npm. The install identifiers are different.
+
+### Install from ClawHub
 
 ```bash
-npm install
-npm run typecheck
-npm test
+openclaw plugins install clawhub:guardrail-bridge
 ```
 
-测试套件涵盖配置解析、各 connector、文本归一化、HTTP provider 与 import connector 的端到端行为。
+### Install from npm
 
-## 与 OpenClaw 的关系
+```bash
+openclaw plugins install npm:@guardrail-bridge/guardrail-bridge
+```
 
-- 运行时：本插件被 OpenClaw host 加载，`openclaw/plugin-sdk/*` 通过 `openclaw` npm 包的 subpath `exports` 解析。
-- 类型：`openclaw` 在 `peerDependencies` 中声明运行依赖，并通过 `devDependencies` 在本仓库本地拉取真实 SDK 类型；不维护本地存根。
-- 兼容性：本插件使用 SDK 的 `core`、`state-paths`、`ssrf-runtime` 三个 subpath。host 升级时如出现签名漂移，参考 [`docs/plugin-sdk/sdk-migration.md`](./docs/plugin-sdk/sdk-migration.md) 调整代码即可。
+Restart the OpenClaw gateway after installing or changing plugin configuration.
 
-## 许可证
+
+## Documentation
+
+- English: [`docs/usage.md`](./docs/usage.md), [`docs/manifest-schema.md`](./docs/manifest-schema.md), [`docs/security-notes.md`](./docs/security-notes.md)
+- 中文: [`README-zh.md`](./README-zh.md), [`docs/usage-zh.md`](./docs/usage-zh.md), [`docs/manifest-schema-zh.md`](./docs/manifest-schema-zh.md), [`docs/security-notes-zh.md`](./docs/security-notes-zh.md)
+
+## License
 
 MIT

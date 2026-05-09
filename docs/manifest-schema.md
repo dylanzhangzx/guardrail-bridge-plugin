@@ -1,66 +1,55 @@
-# 插件清单与 configSchema 注解
+# Plugin Manifest and configSchema Reference
 
-本文档把 `openclaw.plugin.json` 中的 `configSchema` 字段说明整理成可阅读形式，便于配置时对照。规范权威定义以 `openclaw.plugin.json` 为准。
+This document describes the `configSchema` fields in `openclaw.plugin.json` in a readable format. The authoritative schema is `openclaw.plugin.json`.
 
-## 顶层
+## Top-level fields
 
-| 字段              | 类型                      | 默认值 | 说明                                                                                          |
-| ----------------- | ------------------------- | ------ | --------------------------------------------------------------------------------------------- |
-| `connector`       | `"" \| "blacklist" \| "http" \| "import"` | `""`   | connector 类型。空字符串或省略 = 自动从 http/import/blacklist 字段推断；全局 connector 可选，channels 可独立启用 |
-| `timeoutMs`       | number (500–30000)        | 5000   | 单次检查超时                                                                                  |
-| `fallbackOnError` | `"pass" \| "block"`       | `pass` | 出错时的回退动作                                                                              |
-| `blockMessage`    | string                    | `This request has been blocked by the guardrails policy.` | 拦截时回复用户的提示文案 |
-| `http`            | object                    |        | HTTP 引擎配置，详见下                                                                          |
-| `blacklist`       | object                    |        | Blacklist 关键字匹配 connector 配置，详见下                                                    |
-| `import`          | object                    |        | Import 动态导入 connector 配置，详见下                                                         |
-| `channels`        | object                    |        | 按 channel ID 覆写，详见下                                                                     |
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `connector` | `"" \| "blacklist" \| "http"` | `""` | Connector type. Empty string or omitted means auto-detect from `http` or `blacklist` fields. The global connector is optional; channels can enable connectors independently. |
+| `timeoutMs` | number (500–30000) | 5000 | Single check timeout in milliseconds. |
+| `fallbackOnError` | `"pass" \| "block"` | `pass` | Fallback action when a connector errors. |
+| `blockMessage` | string | `This request has been blocked by the guardrail-bridge policy.` | Message returned to the user when a request is blocked. |
+| `http` | object | | HTTP connector configuration. |
+| `blacklist` | object | | Blacklist keyword-matching connector configuration. |
+| `channels` | object | | Per-channel overrides keyed by channel ID. |
 
 ## `http`
 
-| 字段       | 类型                    | 默认值                 | 说明                                                                                                   |
-| ---------- | ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `provider` | string                  |                        | HTTP provider 名称。内置：`openai-moderation` / `dknownai` / `secra` / `hidylan`；自定义需通过 `registerHttpProvider()` 注册 |
-| `apiKey`   | string                  |                        | Provider API key。`openai-moderation` / `dknownai` / `secra` 必填；`hidylan` 当前可选                  |
-| `apiUrl`   | string                  |                        | Endpoint URL。可选，覆盖内置 provider 的默认 URL                                                       |
-| `model`    | string                  | `omni-moderation-latest` | 模型名。`openai-moderation` 使用；`dknownai` / `secra` / `hidylan` 当前忽略                              |
-| `params`   | object                  |                        | Provider 特定参数（如 `project_id`、`region`）                                                          |
-
-## `import`
-
-| 字段             | 类型    | 默认值 | 说明                                                              |
-| ---------------- | ------- | ------ | ----------------------------------------------------------------- |
-| `script`         | string  |        | 动态导入模块的**绝对路径**（`.ts` / `.js`）。非绝对路径会拒绝加载 |
-| `args`           | object  |        | 透传给 connector 的自定义参数                                     |
-| `hot`            | boolean | false  | 启用文件变更热重载                                                |
-| `hotDebounceMs`  | number (50–5000) | 300 | 热重载防抖间隔                                                    |
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `provider` | string | | HTTP provider name. Built-ins: `dknownai`, `dknownai-cn`, `secra`, `hidylan`. Custom providers must be registered with `registerHttpProvider()`. |
+| `apiKey` | string | | Provider API key. Required by `dknownai`, `dknownai-cn`, and `secra`; currently optional for `hidylan`. |
+| `apiUrl` | string | | Optional endpoint override. `dknownai` defaults to `https://open.dknownai.com/v1/guard`; `dknownai-cn` defaults to `https://open.dknowc.cn/v1/guard`. |
+| `model` | string | | Model name. Current built-in providers ignore this field. |
+| `params` | object | | Provider-specific parameters, such as `project_id` or `region`. |
 
 ## `blacklist`
 
-| 字段             | 类型                          | 默认值 | 说明                                                                                                          |
-| ---------------- | ----------------------------- | ------ | ------------------------------------------------------------------------------------------------------------- |
-| `blacklistFile`  | `true \| string \| false`     | false  | 关键字文件源。`true` = 默认路径 `~/.openclaw/guardrails/keywords.txt`；string = 自定义路径；`false` = 禁用     |
-| `caseSensitive`  | boolean                       | false  | 大小写敏感匹配                                                                                                |
-| `hot`            | boolean                       | false  | 文件变更自动重载                                                                                              |
-| `hotDebounceMs`  | number (50–5000)              | 300    | 热重载防抖间隔                                                                                                |
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `blacklistFile` | `true \| string \| false` | false | Keyword file source. `true` means the default path `~/.openclaw/guardrail-bridge/keywords.txt`; string means a custom path; `false` disables file loading. |
+| `caseSensitive` | boolean | false | Enables case-sensitive matching. |
+| `hot` | boolean | false | Automatically reload the keyword file when it changes. |
+| `hotDebounceMs` | number (50–5000) | 300 | Hot-reload debounce interval in milliseconds. |
 
 ## `channels.<channelId>`
 
-每个 channel 可独立启用 connector，即使全局未配置；字段做**部分覆盖**：`http` / `blacklist` / `import` 与全局浅合并；`blockMessage` / `fallbackOnError` / `timeoutMs` 直接覆盖。
+Each channel can enable a connector independently, even when no global connector is configured. Channel object fields are partial overrides: `http` and `blacklist` are shallow-merged with global objects; `blockMessage`, `fallbackOnError`, and `timeoutMs` directly replace global values.
 
-| 字段              | 类型                              | 说明                                                              |
-| ----------------- | --------------------------------- | ----------------------------------------------------------------- |
-| `connector`       | `"blacklist" \| "http" \| "import"` | 此 channel 的 connector，可独立于全局启用                          |
-| `http`            | partial of 顶层 `http` 字段        | 字段级覆写                                                        |
-| `blacklist`       | partial of 顶层 `blacklist` 字段   | 字段级覆写                                                        |
-| `import`          | partial of 顶层 `import` 字段      | 字段级覆写                                                        |
-| `blockMessage`    | string                            | 覆盖全局 `blockMessage`                                           |
-| `fallbackOnError` | `"pass" \| "block"`               | 覆盖全局 `fallbackOnError`                                        |
-| `timeoutMs`       | number (500–30000)                | 覆盖全局 `timeoutMs`                                              |
+| Field | Type | Description |
+| --- | --- | --- |
+| `connector` | `"blacklist" \| "http"` | Connector for this channel. |
+| `http` | partial top-level `http` | Field-level HTTP overrides. |
+| `blacklist` | partial top-level `blacklist` | Field-level blacklist overrides. |
+| `blockMessage` | string | Overrides global `blockMessage`. |
+| `fallbackOnError` | `"pass" \| "block"` | Overrides global `fallbackOnError`. |
+| `timeoutMs` | number (500–30000) | Overrides global `timeoutMs`. |
 
 ## activation
 
-| 字段        | 默认值 | 说明                              |
-| ----------- | ------ | --------------------------------- |
-| `onStartup` | false  | 是否在 OpenClaw 启动时立即激活    |
+| Field | Default | Description |
+| --- | --- | --- |
+| `onStartup` | true | Activates the plugin on OpenClaw startup and registers the `before_dispatch` hook. |
 
-> 该插件挂在 `before_dispatch` hook 上，按需激活即可，无需 startup 加载。
+> This plugin must run `register()` when the gateway starts. Otherwise it will not register the `before_dispatch` hook or initialize blacklist / HTTP connectors.
