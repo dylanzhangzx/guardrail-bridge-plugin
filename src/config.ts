@@ -1,9 +1,9 @@
 // ── Core enums ─────────────────────────────────────────────────────────
 
-export type ConnectorType = "blacklist" | "http" | "import";
+export type ConnectorType = "blacklist" | "http";
 export type HttpProviderType =
-  | "openai-moderation"
   | "dknownai"
+  | "dknownai-cn"
   | "secra"
   | "hidylan"
   | (string & {});
@@ -27,15 +27,6 @@ export type GuardrailsDecision = {
 // ── Unified backend function type ───────────────────────────────────────
 export type BackendFn = (text: string, context: CheckContext) => Promise<GuardrailsDecision>;
 
-// ── import backend: external module function types ──────────────────────
-export type ImportCheckFn = (
-  text: string,
-  context: CheckContext,
-  args: Record<string, unknown>,
-) => Promise<GuardrailsDecision>;
-
-export type ImportInitFn = (args: Record<string, unknown>) => void | Promise<void>;
-
 // ── HTTP config ─────────────────────────────────────────────────────────
 export type HttpConfig = {
   provider: HttpProviderType;
@@ -53,20 +44,11 @@ export type BlacklistConfig = {
   hotDebounceMs: number;
 };
 
-// ── Import connector configuration ──────────────────────────────────────
-export type ImportConfig = {
-  script: string;
-  args: Record<string, unknown>;
-  hot: boolean;
-  hotDebounceMs: number;
-};
-
 // ── Channel override configuration ──────────────────────────────────────
 export type ChannelOverrideConfig = {
   connector?: ConnectorType;
   http?: Partial<Pick<HttpConfig, "provider" | "apiKey" | "apiUrl" | "model" | "params">>;
   blacklist?: Partial<BlacklistConfig>;
-  import?: Partial<ImportConfig>;
   blockMessage?: string;
   fallbackOnError?: "pass" | "block";
   timeoutMs?: number;
@@ -77,7 +59,6 @@ export type GuardrailsConfig = {
   connector: ConnectorType | "";
   http: HttpConfig;
   blacklist: BlacklistConfig;
-  import: ImportConfig;
   timeoutMs: number;
   fallbackOnError: "pass" | "block";
   blockMessage: string;
@@ -90,7 +71,6 @@ export type EffectiveChannelConfig = {
   connector: ConnectorType | null;
   http: HttpConfig;
   blacklist: BlacklistConfig;
-  import: ImportConfig;
   timeoutMs: number;
   fallbackOnError: "pass" | "block";
   blockMessage: string;
@@ -108,7 +88,7 @@ export type Logger = {
  * Resolve the effective connector type from the explicit `connector` field
  * or by auto-detecting from config fields.
  *
- * Priority: connector explicit > http.provider/http.apiUrl > import.script > blacklistFile
+ * Priority: connector explicit > http.provider/http.apiUrl > blacklistFile
  */
 export function resolveConnectorType(config: GuardrailsConfig): ConnectorType | null {
   if (config.connector) {
@@ -116,9 +96,6 @@ export function resolveConnectorType(config: GuardrailsConfig): ConnectorType | 
   }
   if (config.http.provider !== "" || config.http.apiUrl) {
     return "http";
-  }
-  if (config.import.script) {
-    return "import";
   }
   if (
     config.blacklist.blacklistFile === true ||
@@ -148,7 +125,6 @@ export function resolveChannelConfig(
     connector: globalConnector,
     http: global.http,
     blacklist: global.blacklist,
-    import: global.import,
     timeoutMs: global.timeoutMs,
     fallbackOnError: global.fallbackOnError,
     blockMessage: global.blockMessage,
@@ -193,7 +169,7 @@ export function resolveChannelConfig(
     if (retargeted && httpOverride.apiKey === undefined && global.http.apiKey) {
       base.http.apiKey = "";
       logger?.warn(
-        `guardrails: channel "${channelId}" overrides http provider/apiUrl without apiKey — global apiKey was dropped to avoid sending it to an unintended service`,
+        `guardrail-bridge: channel "${channelId}" overrides http provider/apiUrl without apiKey — global apiKey was dropped to avoid sending it to an unintended service`,
       );
     }
   }
@@ -213,24 +189,6 @@ export function resolveChannelConfig(
     }
     if (blOverride.hotDebounceMs !== undefined) {
       base.blacklist.hotDebounceMs = blOverride.hotDebounceMs;
-    }
-  }
-
-  // import field-level override
-  if (override.import) {
-    const impOverride = override.import;
-    base.import = { ...base.import };
-    if (impOverride.script !== undefined) {
-      base.import.script = impOverride.script;
-    }
-    if (impOverride.args !== undefined) {
-      base.import.args = impOverride.args;
-    }
-    if (impOverride.hot !== undefined) {
-      base.import.hot = impOverride.hot;
-    }
-    if (impOverride.hotDebounceMs !== undefined) {
-      base.import.hotDebounceMs = impOverride.hotDebounceMs;
     }
   }
 
@@ -255,20 +213,19 @@ export function resolveConfig(pluginConfig?: Record<string, unknown>): Guardrail
     connector: resolveConnectorField(raw.connector),
     http: resolveHttpConfig(raw.http),
     blacklist: resolveBlacklistConfig(raw.blacklist),
-    import: resolveImportConfig(raw.import),
     timeoutMs: clamp(typeof raw.timeoutMs === "number" ? raw.timeoutMs : 5000, 500, 30000),
     fallbackOnError: raw.fallbackOnError === "block" ? "block" : "pass",
     blockMessage:
       typeof raw.blockMessage === "string"
         ? raw.blockMessage
-        : "This request has been blocked by the guardrails policy.",
+        : "This request has been blocked by the guardrail-bridge policy.",
     channels: resolveChannelsConfig(raw.channels),
   };
 }
 
 // ── Internal helpers ────────────────────────────────────────────────────
 
-const VALID_CONNECTORS = new Set<ConnectorType>(["blacklist", "http", "import"]);
+const VALID_CONNECTORS = new Set<ConnectorType>(["blacklist", "http"]);
 
 function resolveConnectorField(connector: unknown): ConnectorType | "" {
   if (typeof connector === "string" && VALID_CONNECTORS.has(connector as ConnectorType)) {
@@ -282,7 +239,7 @@ function resolveHttpConfig(http: unknown): HttpConfig {
     provider: "",
     apiKey: "",
     apiUrl: "",
-    model: "omni-moderation-latest",
+    model: "",
     params: {},
   };
 
@@ -295,7 +252,7 @@ function resolveHttpConfig(http: unknown): HttpConfig {
     provider: typeof raw.provider === "string" ? raw.provider : "",
     apiKey: typeof raw.apiKey === "string" ? raw.apiKey : "",
     apiUrl: typeof raw.apiUrl === "string" ? raw.apiUrl : "",
-    model: typeof raw.model === "string" ? raw.model : "omni-moderation-latest",
+    model: typeof raw.model === "string" ? raw.model : "",
     params:
       raw.params !== null && typeof raw.params === "object" && !Array.isArray(raw.params)
         ? (raw.params as Record<string, unknown>)
@@ -329,23 +286,6 @@ function resolveBlacklistFile(value: unknown): boolean | string {
     return value;
   }
   return false;
-}
-
-function resolveImportConfig(importValue: unknown): ImportConfig {
-  if (importValue === null || typeof importValue !== "object" || Array.isArray(importValue)) {
-    return { script: "", args: {}, hot: false, hotDebounceMs: 300 };
-  }
-
-  const raw = importValue as Record<string, unknown>;
-  return {
-    script: typeof raw.script === "string" ? raw.script : "",
-    args:
-      raw.args !== null && typeof raw.args === "object" && !Array.isArray(raw.args)
-        ? (raw.args as Record<string, unknown>)
-        : {},
-    hot: raw.hot === true,
-    hotDebounceMs: clamp(typeof raw.hotDebounceMs === "number" ? raw.hotDebounceMs : 300, 50, 5000),
-  };
 }
 
 function resolveChannelsConfig(value: unknown): Record<string, ChannelOverrideConfig> {
@@ -424,27 +364,6 @@ function resolveChannelOverride(raw: Record<string, unknown>): ChannelOverrideCo
     }
     if (Object.keys(blOverride).length > 0) {
       override.blacklist = blOverride;
-    }
-  }
-
-  // import sub-config
-  if (raw.import !== null && typeof raw.import === "object" && !Array.isArray(raw.import)) {
-    const impRaw = raw.import as Record<string, unknown>;
-    const impOverride: Partial<ImportConfig> = {};
-    if (typeof impRaw.script === "string") {
-      impOverride.script = impRaw.script;
-    }
-    if (impRaw.args !== null && typeof impRaw.args === "object" && !Array.isArray(impRaw.args)) {
-      impOverride.args = impRaw.args as Record<string, unknown>;
-    }
-    if (typeof impRaw.hot === "boolean") {
-      impOverride.hot = impRaw.hot;
-    }
-    if (typeof impRaw.hotDebounceMs === "number") {
-      impOverride.hotDebounceMs = clamp(impRaw.hotDebounceMs, 50, 5000);
-    }
-    if (Object.keys(impOverride).length > 0) {
-      override.import = impOverride;
     }
   }
 

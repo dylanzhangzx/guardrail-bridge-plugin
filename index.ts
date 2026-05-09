@@ -1,23 +1,15 @@
 import { createHash } from "node:crypto";
-import path from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { createBlacklistBackend } from "./src/builtin-blacklist-connector.js";
 import { resolveChannelConfig, resolveConfig } from "./src/config.js";
-import type {
-  BackendFn,
-  BlacklistConfig,
-  EffectiveChannelConfig,
-  HttpConfig,
-  ImportConfig,
-} from "./src/config.js";
+import type { BackendFn, BlacklistConfig, EffectiveChannelConfig, HttpConfig } from "./src/config.js";
 import { createGuardrailsHandler } from "./src/handler.js";
 import { resolveHttpAdapter, type GuardrailsProviderAdapter } from "./src/http-connector.js";
-import { createImportBackend, type ImportBackendHandle } from "./src/import-connector.js";
 
 const plugin = {
-  id: "guardrails",
-  name: "Guardrails",
-  description: "Pre-agent guardrails plugin with blacklist, HTTP, and import connectors.",
+  id: "guardrail-bridge",
+  name: "Guardrail Bridge",
+  description: "Pre-agent guardrail-bridge plugin with blacklist and HTTP connectors.",
   register(api: OpenClawPluginApi) {
     const config = resolveConfig(api.pluginConfig);
     const logger = api.logger;
@@ -38,7 +30,7 @@ const plugin = {
     // Check if anything is enabled at all
     const hasAnyEnabled = globalEffective.enabled || channelConfigs.size > 0;
     if (!hasAnyEnabled) {
-      logger.info("guardrails: no effective connector configured, plugin disabled");
+      logger.info("guardrail-bridge: no effective connector configured, plugin disabled");
       return;
     }
 
@@ -155,11 +147,11 @@ const plugin = {
       entry.initPromise = resolveHttpAdapter(http, logger)
         .then((a) => {
           entry.adapter = a;
-          logger.info(`guardrails: HTTP adapter ready (provider: ${http.provider})`);
+          logger.info(`guardrail-bridge: HTTP adapter ready (provider: ${http.provider})`);
         })
         .catch((err: unknown) => {
           entry.initFailed = true;
-          logger.error(`guardrails: failed to init HTTP adapter: ${String(err)}`);
+          logger.error(`guardrail-bridge: failed to init HTTP adapter: ${String(err)}`);
         });
     }
 
@@ -195,141 +187,7 @@ const plugin = {
       }
     }
 
-    // Import connector: per-script dedup (supports channel-level different scripts)
-    const importEntries = new Map<
-      string,
-      {
-        backendFn: BackendFn | null;
-        initFailed: boolean;
-        initPromise: Promise<void>;
-      }
-    >();
-
-    function importEntryKey(importCfg: ImportConfig, timeoutMs: number): string {
-      return createHash("sha256")
-        .update(
-          stableStringify({
-            script: importCfg.script,
-            args: importCfg.args,
-            hot: importCfg.hot,
-            hotDebounceMs: importCfg.hotDebounceMs,
-            timeoutMs,
-          }),
-        )
-        .digest("hex");
-    }
-
-    function ensureImportAdapter(importCfg: ImportConfig, effectiveTimeoutMs: number): void {
-      const scriptPath = importCfg.script;
-      if (!scriptPath) {
-        return;
-      }
-      const key = importEntryKey(importCfg, effectiveTimeoutMs);
-      if (importEntries.has(key)) {
-        return;
-      }
-
-      if (!path.isAbsolute(scriptPath)) {
-        logger.error(
-          `guardrails: import script must be an absolute path, got "${scriptPath}" — connector disabled`,
-        );
-        return;
-      }
-
-      logger.warn(
-        "guardrails: import connector executes TRUSTED LOCAL CODE — verify script path before production use",
-      );
-
-      const entry = {
-        backendFn: null as BackendFn | null,
-        initFailed: false,
-        initPromise: Promise.resolve(),
-      };
-
-      let importHandle: ImportBackendHandle | null = null;
-
-      entry.initPromise = createImportBackend(
-        scriptPath,
-        importCfg.args,
-        importCfg.hot,
-        importCfg.hotDebounceMs,
-        logger,
-      )
-        .then((h) => {
-          importHandle = h;
-          addDisposable(h.dispose);
-          // Import scripts are user code — wrap with external timeout via Promise.race.
-          // HTTP providers handle their own timeout internally via AbortController.
-          entry.backendFn = async (text, context) => {
-            let timer: ReturnType<typeof setTimeout> | undefined;
-            try {
-              return await Promise.race([
-                importHandle!.backendFn(text, context),
-                new Promise<never>((_, reject) => {
-                  timer = setTimeout(
-                    () => reject(new Error("guardrails: import connector timeout")),
-                    effectiveTimeoutMs,
-                  );
-                }),
-              ]);
-            } finally {
-              if (timer) {
-                clearTimeout(timer);
-              }
-            }
-          };
-          logger.info(
-            `guardrails: import connector ready (script: ${scriptPath}, hot: ${importCfg.hot})`,
-          );
-        })
-        .catch((err) => {
-          entry.initFailed = true;
-          logger.error(`guardrails: failed to load import connector: ${err}`);
-        });
-
-      importEntries.set(key, entry);
-    }
-
-    if (usedConnectors.has("import")) {
-      if (globalEffective.enabled && globalEffective.connector === "import") {
-        ensureImportAdapter(globalEffective.import, globalEffective.timeoutMs);
-      }
-      for (const [, cfg] of channelConfigs) {
-        if (cfg.connector === "import") {
-          ensureImportAdapter(cfg.import, cfg.timeoutMs);
-        }
-      }
-    }
-
     // ── Resolve backendFn for a given effective config ─────────────────
-
-    function makeImportBackendFn(
-      importCfg: ImportConfig,
-      effectiveTimeoutMs: number,
-      fallbackOnError: "pass" | "block",
-    ): BackendFn | null {
-      if (!importCfg.script) {
-        return null;
-      }
-      const key = importEntryKey(importCfg, effectiveTimeoutMs);
-      const entry = importEntries.get(key);
-      if (!entry) {
-        return null;
-      }
-
-      return async (text, context) => {
-        if (!entry.backendFn && !entry.initFailed) {
-          await entry.initPromise;
-        }
-        if (!entry.backendFn) {
-          if (fallbackOnError === "block") {
-            throw new Error("guardrails: import connector not available");
-          }
-          return { action: "pass" as const };
-        }
-        return entry.backendFn(text, context);
-      };
-    }
 
     function getBackendFn(effective: EffectiveChannelConfig): BackendFn | null {
       if (!effective.enabled || !effective.connector) {
@@ -345,12 +203,6 @@ const plugin = {
           );
         case "http":
           return makeHttpBackendFn(effective.http, effective.fallbackOnError, effective.timeoutMs);
-        case "import":
-          return makeImportBackendFn(
-            effective.import,
-            effective.timeoutMs,
-            effective.fallbackOnError,
-          );
         default:
           return null;
       }
@@ -365,7 +217,7 @@ const plugin = {
         defaultHandler = createGuardrailsHandler(defaultBackendFn, globalEffective, logger);
       } else if (globalEffective.connector) {
         logger.error(
-          `guardrails: failed to create default connector "${globalEffective.connector}"`,
+          `guardrail-bridge: failed to create default connector "${globalEffective.connector}"`,
         );
       }
     }
@@ -375,7 +227,7 @@ const plugin = {
       const fn = getBackendFn(effective);
       if (!fn) {
         logger.warn(
-          `guardrails: channel "${channelId}" connector "${effective.connector}" not available, skipping`,
+          `guardrail-bridge: channel "${channelId}" connector "${effective.connector}" not available, skipping`,
         );
         continue;
       }
@@ -384,7 +236,7 @@ const plugin = {
 
     // If no handlers at all, nothing to register
     if (!defaultHandler && channelHandlerMap.size === 0) {
-      logger.error("guardrails: no working connectors, plugin disabled");
+      logger.error("guardrail-bridge: no working connectors, plugin disabled");
       return;
     }
 
@@ -400,13 +252,13 @@ const plugin = {
         try {
           dispose();
         } catch (err) {
-          logger.warn(`guardrails: connector dispose failed: ${String(err)}`);
+          logger.warn(`guardrail-bridge: connector dispose failed: ${String(err)}`);
         }
       }
     }
 
     api.registerService({
-      id: "guardrails-connectors",
+      id: "guardrail-bridge-connectors",
       start() {},
       stop: disposeAll,
     });
@@ -427,7 +279,7 @@ const plugin = {
     if (channelHandlerMap.size > 0) {
       parts.push(`${channelHandlerMap.size} channel handler(s)`);
     }
-    logger.info(`guardrails: plugin registered (${parts.join(", ")})`);
+    logger.info(`guardrail-bridge: plugin registered (${parts.join(", ")})`);
   },
 };
 

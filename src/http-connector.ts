@@ -1,8 +1,10 @@
 import type { BackendFn, CheckContext, HttpConfig, Logger } from "./config.js";
 import type { GuardrailsProviderAdapter } from "./provider-types.js";
-import { createDKnownAIAdapter } from "./providers/dknownai.js";
+import {
+  createDKnownAIAdapter,
+  DKNOWNAI_CN_DEFAULT_URL,
+} from "./providers/dknownai.js";
 import { createHidylanAdapter } from "./providers/hidylan.js";
-import { createOpenAIModerationAdapter } from "./providers/openai-moderation.js";
 import { createSecraAdapter } from "./providers/secra.js";
 
 export type { GuardrailsProviderAdapter };
@@ -15,16 +17,16 @@ export type HttpBackendHandle = {
 // ── Provider registry ───────────────────────────────────────────────────
 
 const providerRegistry = new Map<string, GuardrailsProviderAdapter>();
-const builtInProviderNames = new Set(["openai-moderation", "dknownai", "secra", "hidylan"]);
+const builtInProviderNames = new Set(["dknownai", "dknownai-cn", "secra", "hidylan"]);
 
 /**
  * Register a custom HTTP provider adapter by name.
  * The name can then be used as http.provider in the plugin config.
- * Built-in providers ("openai-moderation", "dknownai", "secra", "hidylan") cannot be overridden.
+ * Built-in providers ("dknownai", "dknownai-cn", "secra", "hidylan") cannot be overridden.
  */
 export function registerHttpProvider(name: string, adapter: GuardrailsProviderAdapter): void {
   if (builtInProviderNames.has(name)) {
-    throw new Error(`guardrails: cannot register built-in provider "${name}"`);
+    throw new Error(`guardrail-bridge: cannot register built-in provider "${name}"`);
   }
   providerRegistry.set(name, adapter);
 }
@@ -40,7 +42,7 @@ export function _resetRegistryForTesting(): void {
  * Resolve and initialize an HTTP provider adapter.
  *
  * Provider resolution priority:
- *   1. built-in providers ("openai-moderation", "dknownai", "secra", "hidylan")
+ *   1. built-in providers ("dknownai", "dknownai-cn", "secra", "hidylan")
  *   2. registered providers (via registerHttpProvider)
  *
  * init() is called once with the provided config for global one-time
@@ -54,10 +56,10 @@ export async function resolveHttpAdapter(
   let adapter: GuardrailsProviderAdapter | null = null;
 
   // Built-in providers
-  if (config.provider === "openai-moderation") {
-    adapter = createOpenAIModerationAdapter(logger);
-  } else if (config.provider === "dknownai") {
+  if (config.provider === "dknownai") {
     adapter = createDKnownAIAdapter(logger);
+  } else if (config.provider === "dknownai-cn") {
+    adapter = createDKnownAIAdapter(logger, DKNOWNAI_CN_DEFAULT_URL);
   } else if (config.provider === "secra") {
     adapter = createSecraAdapter(logger);
   } else if (config.provider === "hidylan") {
@@ -69,7 +71,7 @@ export async function resolveHttpAdapter(
       adapter = registered;
     } else {
       logger.error(
-        `guardrails: unknown http provider "${config.provider}" — register it with registerHttpProvider()`,
+        `guardrail-bridge: unknown http provider "${config.provider}" — register it with registerHttpProvider()`,
       );
     }
   }
@@ -79,7 +81,7 @@ export async function resolveHttpAdapter(
     try {
       await adapter.init(config);
     } catch (err) {
-      logger.error(`guardrails: provider init failed: ${String(err)}`);
+      logger.error(`guardrail-bridge: provider init failed: ${String(err)}`);
       adapter = null;
     }
   }

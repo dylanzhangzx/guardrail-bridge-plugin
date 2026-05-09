@@ -61,7 +61,7 @@ export function createGuardrailsHandler(
     try {
       result = await backendFn(text, context);
     } catch (err) {
-      logger.warn(`guardrails: check error, fallback=${config.fallbackOnError}: ${String(err)}`);
+      logger.warn(`guardrail-bridge: check error, fallback=${config.fallbackOnError}: ${String(err)}`);
       if (config.fallbackOnError === "block") {
         return { handled: true, text: config.blockMessage };
       }

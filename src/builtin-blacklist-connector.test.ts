@@ -132,7 +132,7 @@ describe("initDefaultKeywordsFile", () => {
   });
 
   it("copies default file when target does not exist", () => {
-    const target = path.join(tmpDir, "guardrails", "keywords.txt");
+    const target = path.join(tmpDir, "guardrail-bridge", "keywords.txt");
     initDefaultKeywordsFile(target, noopLogger);
     expect(existsSync(target)).toBe(true);
     const content = readFileSync(target, "utf8");
@@ -148,28 +148,28 @@ describe("initDefaultKeywordsFile", () => {
   });
 
   it("warns and leaves target missing when bundled template is unavailable", () => {
-    const target = path.join(tmpDir, "guardrails", "keywords.txt");
+    const target = path.join(tmpDir, "guardrail-bridge", "keywords.txt");
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     initDefaultKeywordsFile(target, logger, null);
 
     expect(logger.warn).toHaveBeenCalledWith(
-      "guardrails: default keywords template not found; starting with empty blacklist until a keywords file is provided",
+      "guardrail-bridge: default keywords template not found; starting with empty blacklist until a keywords file is provided",
     );
     expect(existsSync(target)).toBe(false);
   });
 
   it("warns and leaves target missing when default template copy fails", () => {
     const source = path.join(tmpDir, "keywords.default.txt");
-    const target = path.join(tmpDir, "guardrails", "keywords.txt");
+    const target = path.join(tmpDir, "guardrail-bridge", "keywords.txt");
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     writeFileSync(source, "[level:high]\nbadword\n");
-    writeFileSync(path.join(tmpDir, "guardrails"), "not a directory");
+    writeFileSync(path.join(tmpDir, "guardrail-bridge"), "not a directory");
 
     expect(() => initDefaultKeywordsFile(target, logger, source)).not.toThrow();
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("guardrails: failed to initialize default keywords file"),
+      expect.stringContaining("guardrail-bridge: failed to initialize default keywords file"),
     );
     expect(existsSync(target)).toBe(false);
   });

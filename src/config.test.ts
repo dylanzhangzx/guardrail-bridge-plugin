@@ -9,18 +9,12 @@ describe("resolveConfig", () => {
       provider: "",
       apiKey: "",
       apiUrl: "",
-      model: "omni-moderation-latest",
+      model: "",
       params: {},
-    });
-    expect(config.import).toEqual({
-      script: "",
-      args: {},
-      hot: false,
-      hotDebounceMs: 300,
     });
     expect(config.timeoutMs).toBe(5000);
     expect(config.fallbackOnError).toBe("pass");
-    expect(config.blockMessage).toBe("This request has been blocked by the guardrails policy.");
+    expect(config.blockMessage).toBe("This request has been blocked by the guardrail-bridge policy.");
     expect(config.blacklist).toEqual({
       blacklistFile: false,
       caseSensitive: false,
@@ -33,7 +27,7 @@ describe("resolveConfig", () => {
   it("resolves connector field", () => {
     expect(resolveConfig({ connector: "blacklist" }).connector).toBe("blacklist");
     expect(resolveConfig({ connector: "http" }).connector).toBe("http");
-    expect(resolveConfig({ connector: "import" }).connector).toBe("import");
+    expect(resolveConfig({ connector: "disabled" }).connector).toBe("");
     expect(resolveConfig({ connector: "unknown" }).connector).toBe("");
     expect(resolveConfig({ connector: 42 }).connector).toBe("");
   });
@@ -61,25 +55,8 @@ describe("resolveConfig", () => {
   it("resolves blockMessage", () => {
     expect(resolveConfig({ blockMessage: "Custom block" }).blockMessage).toBe("Custom block");
     expect(resolveConfig({ blockMessage: 42 }).blockMessage).toBe(
-      "This request has been blocked by the guardrails policy.",
+      "This request has been blocked by the guardrail-bridge policy.",
     );
-  });
-});
-
-describe("resolveConfig — import config", () => {
-  it("resolves nested import object", () => {
-    const config = resolveConfig({
-      import: { script: "/opt/checker.ts", args: { key: "val" }, hot: true, hotDebounceMs: 500 },
-    });
-    expect(config.import.script).toBe("/opt/checker.ts");
-    expect(config.import.args).toEqual({ key: "val" });
-    expect(config.import.hot).toBe(true);
-    expect(config.import.hotDebounceMs).toBe(500);
-  });
-
-  it("defaults import to empty when not provided", () => {
-    const config = resolveConfig({});
-    expect(config.import).toEqual({ script: "", args: {}, hot: false, hotDebounceMs: 300 });
   });
 });
 
@@ -87,14 +64,14 @@ describe("resolveConfig — http sub-config", () => {
   it("resolves http with all fields", () => {
     const config = resolveConfig({
       http: {
-        provider: "openai-moderation",
+        provider: "dknownai",
         apiKey: "sk-xxx",
         apiUrl: "https://api.custom.com",
         model: "text-moderation-stable",
         params: { project_id: "proj-1" },
       },
     });
-    expect(config.http.provider).toBe("openai-moderation");
+    expect(config.http.provider).toBe("dknownai");
     expect(config.http.apiKey).toBe("sk-xxx");
     expect(config.http.apiUrl).toBe("https://api.custom.com");
     expect(config.http.model).toBe("text-moderation-stable");
@@ -112,8 +89,12 @@ describe("resolveConfig — http sub-config", () => {
     expect(resolveConfig({ http: { provider: "dknownai" } }).http.provider).toBe("dknownai");
   });
 
-  it("defaults model to omni-moderation-latest", () => {
-    expect(resolveConfig({ http: {} }).http.model).toBe("omni-moderation-latest");
+  it("resolves dknownai-cn provider", () => {
+    expect(resolveConfig({ http: { provider: "dknownai-cn" } }).http.provider).toBe("dknownai-cn");
+  });
+
+  it("defaults model to empty string", () => {
+    expect(resolveConfig({ http: {} }).http.model).toBe("");
   });
 
   it("defaults http to empty when invalid", () => {
@@ -183,11 +164,11 @@ describe("resolveConfig — channels", () => {
     expect(config.channels.discord.connector).toBe("blacklist");
   });
 
-  it("resolves channels with import connector", () => {
+  it("ignores channels with invalid connector", () => {
     const config = resolveConfig({
-      channels: { webchat: { connector: "import" } },
+      channels: { webchat: { connector: "disabled" } },
     });
-    expect(config.channels.webchat.connector).toBe("import");
+    expect(config.channels.webchat.connector).toBeUndefined();
   });
 
   it("resolves channels with http override", () => {
@@ -212,18 +193,6 @@ describe("resolveConfig — channels", () => {
     });
     expect(config.channels.discord.blacklist?.blacklistFile).toBe("/custom/kw.txt");
     expect(config.channels.discord.blacklist?.caseSensitive).toBe(true);
-  });
-
-  it("resolves channels with import override", () => {
-    const config = resolveConfig({
-      channels: {
-        webchat: {
-          import: { script: "/opt/private.ts", args: { key: "val" } },
-        },
-      },
-    });
-    expect(config.channels.webchat.import?.script).toBe("/opt/private.ts");
-    expect(config.channels.webchat.import?.args).toEqual({ key: "val" });
   });
 
   it("resolves channels with scalar overrides", () => {
@@ -268,18 +237,13 @@ describe("resolveConnectorType", () => {
   });
 
   it("auto-detects http from http.provider", () => {
-    const config = resolveConfig({ http: { provider: "openai-moderation" } });
+    const config = resolveConfig({ http: { provider: "dknownai" } });
     expect(resolveConnectorType(config)).toBe("http");
   });
 
   it("auto-detects http from http.apiUrl", () => {
     const config = resolveConfig({ http: { apiUrl: "https://example.com" } });
     expect(resolveConnectorType(config)).toBe("http");
-  });
-
-  it("auto-detects import from import.script", () => {
-    const config = resolveConfig({ import: { script: "/tmp/checker.ts" } });
-    expect(resolveConnectorType(config)).toBe("import");
   });
 
   it("auto-detects blacklist from blacklistFile=true", () => {
@@ -292,10 +256,9 @@ describe("resolveConnectorType", () => {
     expect(resolveConnectorType(config)).toBe("blacklist");
   });
 
-  it("auto-detect priority: http > import > blacklist", () => {
+  it("auto-detect priority: http > blacklist", () => {
     const config = resolveConfig({
       http: { apiUrl: "https://example.com" },
-      import: { script: "/tmp/checker.ts" },
       blacklist: { blacklistFile: true },
     });
     expect(resolveConnectorType(config)).toBe("http");
@@ -363,22 +326,12 @@ describe("resolveChannelConfig", () => {
     expect(channelEffective.connector).toBe("http");
   });
 
-  it("channel can use import connector", () => {
-    const global = resolveConfig({
-      connector: "http",
-      channels: { internal: { connector: "import" } },
-    });
-    const effective = resolveChannelConfig(global, "internal");
-    expect(effective.connector).toBe("import");
-    expect(effective.enabled).toBe(true);
-  });
-
   it("overrides http fields at channel level", () => {
     const global = resolveConfig({
       http: {
-        provider: "openai-moderation",
+        provider: "dknownai",
         apiKey: "sk-global",
-        apiUrl: "https://api.openai.com",
+        apiUrl: "https://guard.example.com",
       },
     });
     const effective = resolveChannelConfig(
@@ -387,7 +340,7 @@ describe("resolveChannelConfig", () => {
     );
     expect(effective.http.provider).toBe("dknownai");
     expect(effective.http.apiKey).toBe("lk-xxx");
-    expect(effective.http.apiUrl).toBe("https://api.openai.com"); // not overridden
+    expect(effective.http.apiUrl).toBe("https://guard.example.com"); // not overridden
   });
 
   it("overrides blacklist fields at channel level", () => {
@@ -401,19 +354,6 @@ describe("resolveChannelConfig", () => {
     const effective = resolveChannelConfig(global, "discord");
     expect(effective.blacklist.caseSensitive).toBe(true);
     expect(effective.blacklist.blacklistFile).toBe(true); // inherited
-  });
-
-  it("overrides import fields at channel level", () => {
-    const global = resolveConfig({
-      connector: "import",
-      import: { script: "/opt/default.ts", args: { a: 1 } },
-      channels: {
-        webchat: { import: { script: "/opt/webchat.ts" } },
-      },
-    });
-    const effective = resolveChannelConfig(global, "webchat");
-    expect(effective.import.script).toBe("/opt/webchat.ts");
-    expect(effective.import.args).toEqual({ a: 1 }); // inherited
   });
 
   it("overrides scalar fields at channel level", () => {
@@ -439,7 +379,7 @@ describe("resolveChannelConfig", () => {
   it("warns when http provider/apiUrl overridden without apiKey", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const global = resolveConfig({
-      http: { provider: "openai-moderation", apiKey: "sk-openai" },
+      http: { provider: "secra", apiKey: "se-global" },
       channels: {
         telegram: { http: { provider: "dknownai", apiUrl: "https://guard.example.com" } },
       },
@@ -451,7 +391,7 @@ describe("resolveChannelConfig", () => {
   it("does NOT inherit global apiKey when channel changes provider without apiKey", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const global = resolveConfig({
-      http: { provider: "openai-moderation", apiKey: "sk-openai" },
+      http: { provider: "secra", apiKey: "se-global" },
       channels: {
         telegram: { http: { provider: "dknownai", apiUrl: "https://guard.example.com" } },
       },
@@ -462,7 +402,7 @@ describe("resolveChannelConfig", () => {
 
   it("does NOT inherit global apiKey when channel only overrides apiUrl", () => {
     const global = resolveConfig({
-      http: { provider: "openai-moderation", apiKey: "sk-openai" },
+      http: { provider: "secra", apiKey: "se-global" },
       channels: {
         telegram: { http: { apiUrl: "https://relay.example.com" } },
       },
@@ -474,20 +414,20 @@ describe("resolveChannelConfig", () => {
   it("preserves global apiKey when channel only overrides model (no provider/apiUrl change)", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const global = resolveConfig({
-      http: { provider: "openai-moderation", apiKey: "sk-openai" },
+      http: { provider: "secra", apiKey: "se-global" },
       channels: {
-        slack: { http: { model: "text-moderation-latest" } },
+        slack: { http: { model: "custom-model" } },
       },
     });
     const effective = resolveChannelConfig(global, "slack", logger);
-    expect(effective.http.apiKey).toBe("sk-openai");
+    expect(effective.http.apiKey).toBe("se-global");
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
   it("does not warn when apiKey is also overridden", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const global = resolveConfig({
-      http: { provider: "openai-moderation", apiKey: "sk-openai" },
+      http: { provider: "secra", apiKey: "se-global" },
       channels: { telegram: { http: { provider: "dknownai", apiKey: "lk-xxx" } } },
     });
     resolveChannelConfig(global, "telegram", logger);
@@ -497,7 +437,7 @@ describe("resolveChannelConfig", () => {
   it("does not warn when global has no apiKey", () => {
     const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const global = resolveConfig({
-      http: { provider: "openai-moderation" },
+      http: { provider: "secra" },
       channels: { telegram: { http: { provider: "dknownai" } } },
     });
     resolveChannelConfig(global, "telegram", logger);

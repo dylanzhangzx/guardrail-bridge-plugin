@@ -3,12 +3,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./src/import-connector.js", () => {
-  return {
-    createImportBackend: vi.fn(),
-  };
-});
-
 vi.mock("./src/http-connector.js", () => {
   return {
     resolveHttpAdapter: vi.fn().mockResolvedValue({
@@ -19,8 +13,6 @@ vi.mock("./src/http-connector.js", () => {
 
 import plugin from "./index.js";
 import { resolveHttpAdapter } from "./src/http-connector.js";
-import { createImportBackend } from "./src/import-connector.js";
-import type { ImportBackendHandle } from "./src/import-connector.js";
 
 function makeApi(pluginConfig: Record<string, unknown> = {}) {
   return {
@@ -41,7 +33,7 @@ describe("index.ts plugin registration", () => {
   });
 
   function writeKeywordsFile(content: string): string {
-    const dir = mkdtempSync(path.join(tmpdir(), "openclaw-guardrails-test-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "guardrail-bridge-test-"));
     tempDirs.push(dir);
     const file = path.join(dir, "keywords.txt");
     writeFileSync(file, content);
@@ -70,7 +62,7 @@ describe("index.ts plugin registration", () => {
     });
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-xxx" },
+      http: { provider: "dknownai", apiKey: "dk-xxx" },
       blacklist: { blacklistFile: true },
     });
     plugin.register(api);
@@ -81,99 +73,9 @@ describe("index.ts plugin registration", () => {
     vi.mocked(resolveHttpAdapter).mockResolvedValue({
       check: vi.fn().mockResolvedValue({ action: "pass" }),
     });
-    const api = makeApi({ http: { provider: "openai-moderation", apiKey: "sk-xxx" } });
+    const api = makeApi({ http: { provider: "dknownai", apiKey: "dk-xxx" } });
     plugin.register(api);
     expect(api.on).toHaveBeenCalledWith("before_dispatch", expect.any(Function));
-  });
-
-  it("rejects relative import script path", () => {
-    const api = makeApi({ import: { script: "relative/checker.ts" } });
-    plugin.register(api);
-    expect(api.on).not.toHaveBeenCalled();
-    expect(api.logger.error).toHaveBeenCalledWith(
-      expect.stringContaining("must be an absolute path"),
-    );
-  });
-
-  it("import connector: registers handler synchronously (not async)", () => {
-    const neverResolve = new Promise<ImportBackendHandle>(() => {});
-    vi.mocked(createImportBackend).mockReturnValue(neverResolve);
-
-    const api = makeApi({ import: { script: "/tmp/checker.ts" } });
-    plugin.register(api);
-
-    expect(api.on).toHaveBeenCalledWith("before_dispatch", expect.any(Function));
-  });
-
-  it("import connector: registers dispose through plugin service stop", async () => {
-    const disposeFn = vi.fn();
-    const mockHandle: ImportBackendHandle = {
-      backendFn: vi.fn().mockResolvedValue({ action: "pass" }),
-      reload: vi.fn(),
-      dispose: disposeFn,
-    };
-    vi.mocked(createImportBackend).mockResolvedValue(mockHandle);
-
-    const api = makeApi({ import: { script: "/tmp/checker.ts" } });
-    plugin.register(api);
-
-    await vi.waitFor(() => {
-      expect(createImportBackend).toHaveBeenCalled();
-    });
-
-    const service = api.registerService.mock.calls[0][0];
-    service.stop();
-    service.stop();
-    expect(disposeFn).toHaveBeenCalledTimes(1);
-  });
-
-  it("import connector: lazy backendFn waits for init then delegates", async () => {
-    const mockBackendFn = vi.fn().mockResolvedValue({ action: "pass" });
-    const mockHandle: ImportBackendHandle = {
-      backendFn: mockBackendFn,
-      reload: vi.fn(),
-      dispose: vi.fn(),
-    };
-
-    let resolveInit!: (h: ImportBackendHandle) => void;
-    const initPromise = new Promise<ImportBackendHandle>((r) => {
-      resolveInit = r;
-    });
-    vi.mocked(createImportBackend).mockReturnValue(initPromise);
-
-    const api = makeApi({ import: { script: "/tmp/checker.ts" } });
-    plugin.register(api);
-
-    const handler = api.on.mock.calls[0][1];
-    const handlerPromise = handler({ content: "hello", channel: "test" }, { channelId: "test" });
-
-    resolveInit(mockHandle);
-
-    const result = await handlerPromise;
-    expect(result.handled).toBe(false);
-    expect(mockBackendFn).toHaveBeenCalled();
-  });
-
-  it("import connector: falls back when module load fails", async () => {
-    vi.mocked(createImportBackend).mockRejectedValue(new Error("module not found"));
-
-    const api = makeApi({
-      import: { script: "/tmp/checker.ts" },
-      fallbackOnError: "block",
-      blockMessage: "Init failed block",
-    });
-    plugin.register(api);
-
-    await vi.waitFor(() => {
-      expect(api.logger.error).toHaveBeenCalledWith(
-        expect.stringContaining("failed to load import connector"),
-      );
-    });
-
-    const handler = api.on.mock.calls[0][1];
-    const result = await handler({ content: "hello", channel: "test" }, { channelId: "test" });
-    expect(result.handled).toBe(true);
-    expect(result.text).toBe("Init failed block");
   });
 
   it("http adapter async init failure → backendFn returns fallback", async () => {
@@ -181,7 +83,7 @@ describe("index.ts plugin registration", () => {
 
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-test" },
+      http: { provider: "dknownai", apiKey: "dk-test" },
       fallbackOnError: "block",
       blockMessage: "Adapter unavailable",
     });
@@ -244,7 +146,7 @@ describe("index.ts — channel-only enable", () => {
       channels: {
         webchat: {
           connector: "http",
-          http: { provider: "openai-moderation", apiKey: "sk-xxx" },
+          http: { provider: "dknownai", apiKey: "dk-xxx" },
         },
       },
     });
@@ -269,73 +171,6 @@ describe("index.ts — channel-only enable", () => {
     expect(unknownResult.handled).toBe(false);
   });
 
-  it("channel-only import connector works without global connector", async () => {
-    const mockBackendFn = vi.fn().mockResolvedValue({ action: "block" });
-    const mockHandle: ImportBackendHandle = {
-      backendFn: mockBackendFn,
-      reload: vi.fn(),
-      dispose: vi.fn(),
-    };
-
-    vi.mocked(createImportBackend).mockResolvedValue(mockHandle);
-
-    const api = makeApi({
-      blockMessage: "Blocked by import",
-      channels: {
-        "internal-web": {
-          connector: "import",
-          import: { script: "/opt/private-guardrails.ts" },
-        },
-      },
-    });
-    plugin.register(api);
-
-    expect(api.on).toHaveBeenCalledWith("before_dispatch", expect.any(Function));
-
-    const handler = api.on.mock.calls[0][1];
-
-    // internal-web → import → block
-    const result = await handler(
-      { content: "hello", channel: "internal-web" },
-      { channelId: "internal-web" },
-    );
-    expect(result.handled).toBe(true);
-    expect(mockBackendFn).toHaveBeenCalled();
-
-    // unknown channel → no global → passthrough
-    const otherResult = await handler(
-      { content: "hello", channel: "telegram" },
-      { channelId: "telegram" },
-    );
-    expect(otherResult.handled).toBe(false);
-  });
-
-  it("same import script with different args initializes separate backends", async () => {
-    vi.mocked(createImportBackend).mockClear();
-    const mockHandle: ImportBackendHandle = {
-      backendFn: vi.fn().mockResolvedValue({ action: "pass" }),
-      reload: vi.fn(),
-      dispose: vi.fn(),
-    };
-    vi.mocked(createImportBackend).mockResolvedValue(mockHandle);
-
-    const api = makeApi({
-      connector: "import",
-      import: { script: "/opt/checker.ts", args: { tier: "global" } },
-      channels: {
-        webchat: {
-          connector: "import",
-          import: { script: "/opt/checker.ts", args: { tier: "webchat" } },
-        },
-      },
-    });
-    plugin.register(api);
-
-    expect(createImportBackend).toHaveBeenCalledTimes(2);
-    const argSets = vi.mocked(createImportBackend).mock.calls.map((call) => call[1]);
-    expect(argSets).toEqual(expect.arrayContaining([{ tier: "global" }, { tier: "webchat" }]));
-  });
-
   it("multiple channels with different connectors, no global", async () => {
     vi.mocked(resolveHttpAdapter).mockResolvedValue({
       check: vi.fn().mockResolvedValue({ action: "block" }),
@@ -347,7 +182,7 @@ describe("index.ts — channel-only enable", () => {
       channels: {
         webchat: {
           connector: "http",
-          http: { provider: "openai-moderation", apiKey: "sk-xxx" },
+          http: { provider: "dknownai", apiKey: "dk-xxx" },
         },
         discord: {
           connector: "blacklist",
@@ -367,7 +202,7 @@ describe("index.ts channel routing", () => {
 
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-xxx" },
+      http: { provider: "dknownai", apiKey: "dk-xxx" },
       blacklist: { blacklistFile: false },
       channels: {
         webchat: {
@@ -388,7 +223,7 @@ describe("index.ts channel routing", () => {
 
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-test" },
+      http: { provider: "dknownai", apiKey: "dk-test" },
       blockMessage: "Global block",
       channels: {
         slack: { blockMessage: "Slack block" },
@@ -420,7 +255,7 @@ describe("index.ts channel routing", () => {
 
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-test" },
+      http: { provider: "dknownai", apiKey: "dk-test" },
       channels: {
         discord: { blockMessage: "Discord only" },
       },
@@ -436,12 +271,12 @@ describe("index.ts channel routing", () => {
   });
 
   it("supports different HTTP providers per channel", async () => {
-    const openaiCheck = vi.fn().mockResolvedValue({ action: "pass" });
+    const secraCheck = vi.fn().mockResolvedValue({ action: "pass" });
     const dknownaiCheck = vi.fn().mockResolvedValue({ action: "block" });
 
     vi.mocked(resolveHttpAdapter).mockImplementation(async (config: any) => {
-      if (config.provider === "openai-moderation") {
-        return { check: openaiCheck };
+      if (config.provider === "secra") {
+        return { check: secraCheck };
       }
       if (config.provider === "dknownai") {
         return { check: dknownaiCheck };
@@ -451,7 +286,7 @@ describe("index.ts channel routing", () => {
 
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-test" },
+      http: { provider: "secra", apiKey: "se-test" },
       blockMessage: "Blocked",
       channels: {
         discord: {
@@ -463,13 +298,13 @@ describe("index.ts channel routing", () => {
 
     const handler = api.on.mock.calls[0][1];
 
-    // Default channel (openai) → pass
+    // Default channel (secra) → pass
     const defaultResult = await handler(
       { content: "hello", channel: "telegram" },
       { channelId: "telegram" },
     );
     expect(defaultResult.handled).toBe(false);
-    expect(openaiCheck).toHaveBeenCalled();
+    expect(secraCheck).toHaveBeenCalled();
 
     // Discord channel (dknownai) → block
     const discordResult = await handler(
@@ -492,7 +327,7 @@ describe("index.ts channel routing", () => {
 
     const api = makeApi({
       connector: "http",
-      http: { provider: "openai-moderation", apiKey: "sk-global" },
+      http: { provider: "dknownai", apiKey: "dk-global" },
       channels: {
         slack: {
           http: { apiKey: "sk-slack-override" },
@@ -594,75 +429,5 @@ describe("index.ts channel routing", () => {
 
     await Promise.all([globalPromise, discordPromise]);
     expect(checkFn).toHaveBeenCalledTimes(2);
-  });
-});
-
-// ── Import connector timeout ───────────────────────────────────────────
-
-describe("index.ts — import connector timeout", () => {
-  it("slow backendFn exceeds timeoutMs → handler falls back", async () => {
-    vi.useFakeTimers();
-    try {
-      const mockHandle: ImportBackendHandle = {
-        backendFn: vi.fn(() => new Promise<never>(() => {})), // never resolves
-        reload: vi.fn(),
-        dispose: vi.fn(),
-      };
-      vi.mocked(createImportBackend).mockResolvedValue(mockHandle);
-
-      const api = makeApi({
-        import: { script: "/tmp/slow-checker.ts" },
-        fallbackOnError: "block",
-        blockMessage: "Import timed out",
-      });
-      plugin.register(api);
-
-      // Flush microtasks so entry.backendFn gets set
-      await Promise.resolve();
-      await Promise.resolve();
-
-      const handler = api.on.mock.calls[0][1];
-      const handlerPromise = handler({ content: "text", channel: "test" }, { channelId: "test" });
-
-      // Advance past default timeoutMs (5000ms, clamped to >=500)
-      await vi.advanceTimersByTimeAsync(6000);
-
-      const result = await handlerPromise;
-      expect(result.handled).toBe(true);
-      expect(result.text).toBe("Import timed out");
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("fast backendFn resolves before timeout → returns result, timer cleaned up", async () => {
-    vi.useFakeTimers();
-    try {
-      const mockHandle: ImportBackendHandle = {
-        backendFn: vi.fn().mockResolvedValue({ action: "pass" }),
-        reload: vi.fn(),
-        dispose: vi.fn(),
-      };
-      vi.mocked(createImportBackend).mockResolvedValue(mockHandle);
-
-      const api = makeApi({
-        import: { script: "/tmp/fast-checker.ts" },
-        fallbackOnError: "block",
-        blockMessage: "Blocked",
-      });
-      plugin.register(api);
-
-      // Flush microtasks so entry.backendFn gets set
-      await Promise.resolve();
-      await Promise.resolve();
-
-      const handler = api.on.mock.calls[0][1];
-      const result = await handler({ content: "text", channel: "test" }, { channelId: "test" });
-
-      // Fast backend returns pass immediately — no block
-      expect(result.handled).toBe(false);
-    } finally {
-      vi.useRealTimers();
-    }
   });
 });

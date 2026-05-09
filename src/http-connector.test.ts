@@ -42,10 +42,10 @@ function lastGuardedCall(): { url: string; init?: RequestInit } {
 
 function makeHttpConfig(overrides: Partial<HttpConfig> = {}): HttpConfig {
   return {
-    provider: "openai-moderation",
+    provider: "dknownai",
     apiKey: "sk-test",
     apiUrl: "",
-    model: "omni-moderation-latest",
+    model: "",
     params: {},
     ...overrides,
   };
@@ -153,186 +153,23 @@ describe("http-connector — provider registry", () => {
     expect(result.action).toBe("pass");
   });
 
-  it("rejects built-in provider names in the custom registry", () => {
-    const mockAdapter: GuardrailsProviderAdapter = {
-      check: vi.fn().mockResolvedValue({ action: "block" }),
-    };
+  it.each(["dknownai", "dknownai-cn"])(
+    "rejects built-in provider name %s in the custom registry",
+    (provider) => {
+      const mockAdapter: GuardrailsProviderAdapter = {
+        check: vi.fn().mockResolvedValue({ action: "block" }),
+      };
 
-    expect(() => registerHttpProvider("openai-moderation", mockAdapter)).toThrow(
-      /built-in provider/,
-    );
-  });
-});
-
-// ── openai-moderation provider ──────────────────────────────────────────
-
-describe("http-connector — openai-moderation provider", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.mocked(fetchWithSsrFGuard).mockReset();
-  });
-
-  it("network call goes through fetchWithSsrFGuard", async () => {
-    mockGuardedResponse({
-      ok: true,
-      headers: new Headers({ "content-type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          results: [{ flagged: false, categories: {}, category_scores: {} }],
-        }),
-    });
-
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test" }),
-      "pass",
-      5000,
-      noopLogger,
-    );
-    await backendFn("text", {});
-
-    expect(fetchWithSsrFGuard).toHaveBeenCalledTimes(1);
-    expect(lastGuardedCall().url).toBe("https://api.openai.com/v1/moderations");
-  });
-
-  it("returns block when flagged", async () => {
-    mockGuardedResponse({
-      ok: true,
-      headers: new Headers({ "content-type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          results: [
-            {
-              flagged: true,
-              categories: { violence: true, hate: false },
-              category_scores: { violence: 0.95, hate: 0.1 },
-            },
-          ],
-        }),
-    });
-
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test" }),
-      "pass",
-      5000,
-      noopLogger,
-    );
-    const result = await backendFn("violent text", {});
-    expect(result.action).toBe("block");
-  });
-
-  it("returns pass when not flagged", async () => {
-    mockGuardedResponse({
-      ok: true,
-      headers: new Headers({ "content-type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          results: [
-            {
-              flagged: false,
-              categories: { violence: false },
-              category_scores: { violence: 0.01 },
-            },
-          ],
-        }),
-    });
-
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test" }),
-      "pass",
-      5000,
-      noopLogger,
-    );
-    const result = await backendFn("safe text", {});
-    expect(result.action).toBe("pass");
-  });
-
-  it("uses default OpenAI URL when apiUrl empty", async () => {
-    mockGuardedResponse({
-      ok: true,
-      headers: new Headers({ "content-type": "application/json" }),
-      json: () =>
-        Promise.resolve({
-          results: [{ flagged: false, categories: {}, category_scores: {} }],
-        }),
-    });
-
-    await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test", apiUrl: "" }),
-      "pass",
-      5000,
-      noopLogger,
-    ).then(({ backendFn }) => backendFn("text", {}));
-
-    expect(lastGuardedCall().url).toBe("https://api.openai.com/v1/moderations");
-  });
-
-  it("returns fallback on error", async () => {
-    mockGuardedReject(new Error("timeout"));
-
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test" }),
-      "block",
-      5000,
-      noopLogger,
-    );
-    const result = await backendFn("text", {});
-    expect(result.action).toBe("block");
-  });
-
-  it("missing apiKey → warn + fallbackOnError without network call", async () => {
-    const warnFn = vi.fn();
-    const logger = { info: vi.fn(), warn: warnFn, error: vi.fn() };
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "" }),
-      "block",
-      5000,
-      logger,
-    );
-    const result = await backendFn("text", {});
-    expect(result.action).toBe("block");
-    expect(fetchWithSsrFGuard).not.toHaveBeenCalled();
-    expect(warnFn).toHaveBeenCalledWith(expect.stringContaining("requires apiKey"));
-  });
-
-  it("empty results array → fallbackOnError", async () => {
-    mockGuardedResponse({
-      ok: true,
-      headers: new Headers({ "content-type": "application/json" }),
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test" }),
-      "block",
-      5000,
-      noopLogger,
-    );
-    const result = await backendFn("text", {});
-    expect(result.action).toBe("block");
-  });
-
-  it("missing results key → fallbackOnError", async () => {
-    mockGuardedResponse({
-      ok: true,
-      headers: new Headers({ "content-type": "application/json" }),
-      json: () => Promise.resolve({}),
-    });
-
-    const { backendFn } = await createHttpBackend(
-      makeHttpConfig({ provider: "openai-moderation", apiKey: "sk-test" }),
-      "pass",
-      5000,
-      noopLogger,
-    );
-    const result = await backendFn("text", {});
-    expect(result.action).toBe("pass");
-  });
+      expect(() => registerHttpProvider(provider, mockAdapter)).toThrow(/built-in provider/);
+    },
+  );
 });
 
 // ── dknownai provider ───────────────────────────────────────────────────
 
 describe("http-connector — dknownai provider", () => {
   const TEST_URL = "https://open.dknownai.com/v1/guard";
+  const CN_TEST_URL = "https://open.dknowc.cn/v1/guard";
 
   afterEach(() => {
     vi.restoreAllMocks();
@@ -407,9 +244,52 @@ describe("http-connector — dknownai provider", () => {
     expect(lastGuardedCall().url).toBe(TEST_URL);
   });
 
+  it("uses dknownai default apiUrl when apiUrl is empty", async () => {
+    mockGuardedResponse({
+      ok: true,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: () => Promise.resolve({ request_id: "r", status: "SAFE" }),
+    });
+    await createHttpBackend(makeDKConfig({ apiUrl: "" }), "pass", 5000, noopLogger).then(
+      ({ backendFn }) => backendFn("text", {}),
+    );
+    expect(lastGuardedCall().url).toBe(TEST_URL);
+  });
+
+  it("uses dknownai-cn default apiUrl", async () => {
+    mockGuardedResponse({
+      ok: true,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: () => Promise.resolve({ request_id: "r", status: "SAFE" }),
+    });
+    await createHttpBackend(
+      makeDKConfig({ provider: "dknownai-cn", apiUrl: "" }),
+      "pass",
+      5000,
+      noopLogger,
+    ).then(({ backendFn }) => backendFn("text", {}));
+    expect(lastGuardedCall().url).toBe(CN_TEST_URL);
+  });
+
+  it("uses dknownai-cn apiUrl override", async () => {
+    const overrideUrl = "https://guard.example.cn/v1/guard";
+    mockGuardedResponse({
+      ok: true,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: () => Promise.resolve({ request_id: "r", status: "SAFE" }),
+    });
+    await createHttpBackend(
+      makeDKConfig({ provider: "dknownai-cn", apiUrl: overrideUrl }),
+      "pass",
+      5000,
+      noopLogger,
+    ).then(({ backendFn }) => backendFn("text", {}));
+    expect(lastGuardedCall().url).toBe(overrideUrl);
+  });
+
   it.each([
-    [{ sessionKey: "sess-123" }, "c8d9cf28-51b3-42ac-af87-788b7745331a"],
-    [{ channelId: "discord", userId: "u42" }, "d7087869-047c-49b7-a3ad-ee5d3fd34a46"],
+    [{ sessionKey: "sess-123" }, "sess-123"],
+    [{ channelId: "discord", userId: "u42" }, "discord:u42"],
   ] as const)("derives session_id from context %o", async (context, expectedSessionId) => {
     mockGuardedResponse({
       ok: true,

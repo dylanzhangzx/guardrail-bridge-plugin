@@ -67,7 +67,7 @@ describe("handler", () => {
 
   it("falls back on timeout error from backend", async () => {
     const backend: BackendFn = async () => {
-      throw new Error("guardrails: timeout");
+      throw new Error("guardrail-bridge: timeout");
     };
     const handler = createGuardrailsHandler(
       backend,
