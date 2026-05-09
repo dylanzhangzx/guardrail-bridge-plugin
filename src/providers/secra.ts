@@ -2,7 +2,7 @@ import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
 import type { CheckContext, GuardrailsDecision, HttpConfig, Logger } from "../config.js";
 import type { GuardrailsProviderAdapter } from "../provider-types.js";
 
-const SECRA_DEFAULT_URL = "https://secra-backend-production.up.railway.app/v1/scan";
+const SECRA_DEFAULT_URL = "https://secra-backend-production.up.railway.app";
 
 // /v1/scan recommendation values per Secra SDK 1.2.0 (models.py:18):
 //   ALLOW  → pass
@@ -47,6 +47,7 @@ export function createSecraAdapter(logger: Logger): GuardrailsProviderAdapter {
       }
 
       const url = config.apiUrl || SECRA_DEFAULT_URL;
+
       let release: (() => Promise<void>) | undefined;
       try {
         const guarded = await fetchWithSsrFGuard({

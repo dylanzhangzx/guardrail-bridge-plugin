@@ -12,7 +12,7 @@ The packaged runtime is built against OpenClaw `2026.4.26`, and the compatibilit
 ## Distribution Paths
 
 - **ClawHub / OpenClaw install target**: `clawhub:guardrail-bridge`
-- **npm package**: `@guardrail-bridge/guardrail-bridge`
+- **npm package**: `guardrail-bridge`
 
 Published archives include the runtime bundle, plugin manifest, assets, and end-user documentation only.
 
@@ -41,6 +41,7 @@ Remote content moderation provider for adding extra message safety review.
 
 - **Provider name**: `secra`
 - **API key required**: Yes
+- **API URL required**: No (defaults to official Railway-hosted endpoint; can be overridden with `apiUrl`)
 - **Website**: [secra.ai](https://secra.ai/)
 
 ### Hidylan
@@ -213,7 +214,7 @@ Use provider-specific environment variable names so users can tell connectors ap
 | --- | --- | --- |
 | `provider` | Yes | Provider name: `dknownai`, `dknownai-cn`, `secra`, or `hidylan`. |
 | `apiKey` | Yes (except `hidylan`) | Provider API key. Can use environment variable substitution. |
-| `apiUrl` | No | Optional endpoint override. |
+| `apiUrl` | Yes (for `secra`) | Endpoint URL. Required for `secra` provider; optional override for others. |
 | `model` | No | Model name. Current built-in providers ignore this field. |
 | `params` | No | Provider-specific parameters (e.g., `project_id`, `region`). |
 
@@ -230,7 +231,7 @@ openclaw plugins install clawhub:guardrail-bridge
 ### Install from npm
 
 ```bash
-openclaw plugins install npm:@guardrail-bridge/guardrail-bridge
+openclaw plugins install npm:guardrail-bridge
 ```
 
 Restart the OpenClaw gateway after installing or changing plugin configuration.

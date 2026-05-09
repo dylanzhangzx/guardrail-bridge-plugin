@@ -64,19 +64,21 @@ When `blacklistFile: true` is used for the first time and the default file does 
 }
 ```
 
+> **Endpoint source note for all HTTP providers**: Default endpoints for all HTTP providers (built-in and custom) are obtained from official provider documentation and websites. Providers may change their endpoints over time. For production deployments, please verify the current endpoint on the provider's official website. You can override any endpoint using the `apiUrl` configuration field.
+
 Built-in providers:
 
 | Name | apiKey | Default endpoint |
 | --- | --- | --- |
 | `dknownai` | Required | `https://open.dknownai.com/v1/guard` |
 | `dknownai-cn` | Required | `https://open.dknowc.cn/v1/guard` |
-| `secra` | Required | Built-in Secra endpoint; can be overridden with `apiUrl` |
+| `secra` | Required | `https://secra-backend-production.up.railway.app` |
 | `hidylan` | Optional | Built-in Hidylan endpoint; can be overridden with `apiUrl` |
 
 #### Custom providers
 
 ```typescript
-import { registerHttpProvider } from "@guardrail-bridge/guardrail-bridge/api";
+import { registerHttpProvider } from "guardrail-bridge/api";
 
 registerHttpProvider("my-provider", {
   async init(config) {

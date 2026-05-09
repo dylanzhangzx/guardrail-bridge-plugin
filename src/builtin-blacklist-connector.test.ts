@@ -136,8 +136,11 @@ describe("initDefaultKeywordsFile", () => {
     initDefaultKeywordsFile(target, noopLogger);
     expect(existsSync(target)).toBe(true);
     const content = readFileSync(target, "utf8");
+    expect(content).toContain("# Guardrail Bridge — Default keyword list");
     expect(content).toContain("[level:critical]");
-    expect(content).toContain("rm -rf /");
+    expect(content).toContain("[level:high]");
+    expect(content).toContain("[level:medium]");
+    expect(content).toContain("[level:low]");
   });
 
   it("does not overwrite existing file", () => {

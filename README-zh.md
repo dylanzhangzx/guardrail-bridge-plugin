@@ -12,7 +12,7 @@
 ## 分发路径
 
 - **ClawHub / OpenClaw 安装目标**：`clawhub:guardrail-bridge`
-- **npm 包名**：`@guardrail-bridge/guardrail-bridge`
+- **npm 包名**：`guardrail-bridge`
 
 发布归档只包含运行时代码、插件 manifest、静态资源和最终用户文档，不包含开发文档。
 
@@ -42,6 +42,7 @@
 
 - **Provider 名称**：`secra`
 - **API key 要求**：必填
+- **API URL 要求**：否（默认使用官方 Railway 托管端点；可通过 `apiUrl` 覆盖）
 - **官网**：[secra.ai](https://secra.ai/)
 
 ### Hidylan
@@ -214,7 +215,7 @@
 | --- | --- | --- |
 | `provider` | 是 | Provider 名称：`dknownai`、`dknownai-cn`、`secra` 或 `hidylan`。 |
 | `apiKey` | 是（`hidylan` 除外） | Provider API key。可使用环境变量替换。 |
-| `apiUrl` | 否 | 可选的 endpoint 覆盖。 |
+| `apiUrl` | 是（`secra` 需要） | Endpoint URL。`secra` provider 必须配置；其他 provider 可选覆盖。 |
 | `model` | 否 | 模型名称。当前内置 provider 忽略该字段。 |
 | `params` | 否 | Provider 特定参数（如 `project_id`、`region`）。 |
 
@@ -231,7 +232,7 @@ openclaw plugins install clawhub:guardrail-bridge
 ### 通过 npm 安装
 
 ```bash
-openclaw plugins install npm:@guardrail-bridge/guardrail-bridge
+openclaw plugins install npm:guardrail-bridge
 ```
 
 安装或修改插件配置后，需要重启 OpenClaw gateway。

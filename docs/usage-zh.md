@@ -62,19 +62,21 @@
 }
 ```
 
+> **所有 HTTP Provider 的端点地址说明**：所有 HTTP provider（内置和自定义）的默认端点地址均来自各 provider 的官方文档或官方网站。Provider 可能会变更其端点地址。生产环境部署时，请在 provider 官方网站确认当前端点地址。您可以通过 `apiUrl` 配置字段覆盖任何默认端点。
+
 内置 provider：
 
-| 名称                | apiKey 要求 | 默认 endpoint                     |
-| ------------------- | ----------- | --------------------------------- |
-| `dknownai`          | 必填        | `https://open.dknownai.com/v1/guard` |
-| `dknownai-cn`       | 必填        | `https://open.dknowc.cn/v1/guard` |
-| `secra`             | 必填        | 内置 Secra endpoint，可用 `apiUrl` 覆盖 |
-| `hidylan`           | 可选        | 内置 Hidylan endpoint，可用 `apiUrl` 覆盖 |
+| 名称                | apiKey 要求 | 默认 endpoint                                             |
+| ------------------- | ----------- | --------------------------------------------------------- |
+| `dknownai`          | 必填        | `https://open.dknownai.com/v1/guard`                       |
+| `dknownai-cn`       | 必填        | `https://open.dknowc.cn/v1/guard`                         |
+| `secra`             | 必填        | `https://secra-backend-production.up.railway.app`         |
+| `hidylan`           | 可选        | 内置 Hidylan endpoint，可用 `apiUrl` 覆盖                 |
 
 #### 注册自定义 provider
 
 ```typescript
-import { registerHttpProvider } from "@guardrail-bridge/guardrail-bridge/api";
+import { registerHttpProvider } from "guardrail-bridge/api";
 
 registerHttpProvider("my-provider", {
   async init(config) {
