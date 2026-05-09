@@ -34,6 +34,7 @@
 - **Provider 名称**：`dknownai`（国际）、`dknownai-cn`（中国）
 - **API key 要求**：必填
 - **官网**：[dknownai.com](https://dknownai.com/)
+- **官网（中国）**：[dknownc.cn](https://www.dknowc.cn/)
 
 ### Secra
 
