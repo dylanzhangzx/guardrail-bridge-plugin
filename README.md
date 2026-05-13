@@ -11,10 +11,20 @@ The packaged runtime is built against OpenClaw `2026.4.26`, and the compatibilit
 
 ## Distribution Paths
 
-- **ClawHub / OpenClaw install target**: `clawhub:guardrail-bridge`
-- **npm package**: `guardrail-bridge`
+- **ClawHub / OpenClaw install target**: `clawhub:@guardrailbridge/guardrail-bridge`
+- **npm package**: `@guardrailbridge/guardrail-bridge`
 
 Published archives include the runtime bundle, plugin manifest, assets, and end-user documentation only.
+
+## Why it matters
+
+In an OpenClaw test, an unprotected agent initially refused to reveal an API key, but eventually returned a Base64-encoded credential after multi-turn social pressure.
+
+With Guardrail Bridge enabled, the same credential exfiltration attempt was blocked before disclosure.
+
+![Guardrail Bridge API key leakage comparison](https://raw.githubusercontent.com/guardrail-bridge/guardrail-bridge-plugin/main/assets/api-key-leakage-comparison.svg)
+
+Sensitive values are redacted. See the full case study: [Blocking API Key Exfiltration](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/case-study-api-key-leakage.md).
 
 ## What It Does
 
@@ -33,7 +43,7 @@ Detects prompt injection, jailbreak, and agent hijacking attempts for deployment
 
 - **Provider names**: `dknownai` (international), `dknownai-cn` (China)
 - **API key required**: Yes
-- **Website**: [dknownai.com](https://dknownai.com/)
+- **Get API keys**: use [dknownai.com](https://dknownai.com/) for `dknownai`, or [dknowc.cn](https://www.dknowc.cn/) for `dknownai-cn`.
 
 ### Secra
 
@@ -102,6 +112,28 @@ Enable the plugin in the OpenClaw config:
 }
 ```
 
+### HTTP Provider Example: DKnownAI China
+
+```json5
+{
+  plugins: {
+    entries: {
+      "guardrail-bridge": {
+        enabled: true,
+        config: {
+          connector: "http",
+          http: {
+            provider: "dknownai-cn",
+            apiKey: "${DKNOWNAI_CN_API_KEY}",
+          },
+          fallbackOnError: "block",
+        },
+      },
+    },
+  },
+}
+```
+
 ### HTTP Provider Example: Secra
 
 ```json5
@@ -150,7 +182,7 @@ Enable the plugin in the OpenClaw config:
 
 There are three ways to provide API keys:
 
-Use provider-specific environment variable names so users can tell connectors apart, for example `DKNOWNAI_API_KEY`, `SECRA_API_KEY`, or `HIDYLAN_API_KEY`.
+Use provider-specific environment variable names so users can tell connectors apart, for example `DKNOWNAI_API_KEY`, `DKNOWNAI_CN_API_KEY`, `SECRA_API_KEY`, or `HIDYLAN_API_KEY`.
 
 1. **Environment variable** (recommended):
 
@@ -225,13 +257,13 @@ You can install the plugin through either ClawHub or npm. The install identifier
 ### Install from ClawHub
 
 ```bash
-openclaw plugins install clawhub:guardrail-bridge
+openclaw plugins install clawhub:@guardrailbridge/guardrail-bridge
 ```
 
 ### Install from npm
 
 ```bash
-openclaw plugins install npm:guardrail-bridge
+openclaw plugins install npm:@guardrailbridge/guardrail-bridge
 ```
 
 Restart the OpenClaw gateway after installing or changing plugin configuration.
@@ -239,8 +271,15 @@ Restart the OpenClaw gateway after installing or changing plugin configuration.
 
 ## Documentation
 
-- English: [`docs/usage.md`](./docs/usage.md), [`docs/manifest-schema.md`](./docs/manifest-schema.md), [`docs/security-notes.md`](./docs/security-notes.md)
-- 中文: [`README-zh.md`](./README-zh.md), [`docs/usage-zh.md`](./docs/usage-zh.md), [`docs/manifest-schema-zh.md`](./docs/manifest-schema-zh.md), [`docs/security-notes-zh.md`](./docs/security-notes-zh.md)
+- English:
+  - [Usage](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/usage.md)
+  - [Manifest schema](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/manifest-schema.md)
+  - [Security notes](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/security-notes.md)
+- 中文:
+  - [README-zh](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/README-zh.md)
+  - [使用指南](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/usage-zh.md)
+  - [Manifest schema](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/manifest-schema-zh.md)
+  - [安全说明](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/security-notes-zh.md)
 
 ## License
 

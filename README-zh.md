@@ -11,10 +11,20 @@
 
 ## 分发路径
 
-- **ClawHub / OpenClaw 安装目标**：`clawhub:guardrail-bridge`
-- **npm 包名**：`guardrail-bridge`
+- **ClawHub / OpenClaw 安装目标**：`clawhub:@guardrailbridge/guardrail-bridge`
+- **npm 包名**：`@guardrailbridge/guardrail-bridge`
 
 发布归档只包含运行时代码、插件 manifest、静态资源和最终用户文档，不包含开发文档。
+
+## 为什么需要它
+
+在一次 OpenClaw 测试中，未启用 Guardrail Bridge 的 Agent 一开始拒绝泄露 API Key，但在多轮诱导、Base64 编码请求和紧急施压后，最终返回了编码后的凭据。
+
+启用 Guardrail Bridge 后，同类敏感凭据请求在披露前被策略拦截。
+
+![Guardrail Bridge API key leakage comparison](https://raw.githubusercontent.com/guardrail-bridge/guardrail-bridge-plugin/main/assets/api-key-leakage-comparison.svg)
+
+图中敏感值均已脱敏。完整案例见：[阻止 API Key 外泄案例](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/case-study-api-key-leakage.md)。
 
 ## 功能
 
@@ -33,8 +43,7 @@
 
 - **Provider 名称**：`dknownai`（国际）、`dknownai-cn`（中国）
 - **API key 要求**：必填
-- **官网**：[dknownai.com](https://dknownai.com/)
-- **官网（中国）**：[dknownc.cn](https://www.dknowc.cn/)
+- **API key 获取**：`dknownai` 请访问 [dknownai.com](https://dknownai.com/)；`dknownai-cn` 请访问 [dknowc.cn](https://www.dknowc.cn/)。
 
 ### Secra
 
@@ -103,6 +112,28 @@
 }
 ```
 
+### HTTP Provider 示例：DKnownAI 中国版
+
+```json5
+{
+  plugins: {
+    entries: {
+      "guardrail-bridge": {
+        enabled: true,
+        config: {
+          connector: "http",
+          http: {
+            provider: "dknownai-cn",
+            apiKey: "${DKNOWNAI_CN_API_KEY}",
+          },
+          fallbackOnError: "block",
+        },
+      },
+    },
+  },
+}
+```
+
 ### HTTP Provider 示例：Secra
 
 ```json5
@@ -151,7 +182,7 @@
 
 有三种方式提供 API key：
 
-建议按 provider 使用不同的环境变量名，便于区分，例如 `DKNOWNAI_API_KEY`、`SECRA_API_KEY`、`HIDYLAN_API_KEY`。
+建议按 provider 使用不同的环境变量名，便于区分，例如 `DKNOWNAI_API_KEY`、`DKNOWNAI_CN_API_KEY`、`SECRA_API_KEY`、`HIDYLAN_API_KEY`。
 
 1. **环境变量**（推荐）：
 
@@ -226,13 +257,13 @@
 ### 通过 ClawHub 安装
 
 ```bash
-openclaw plugins install clawhub:guardrail-bridge
+openclaw plugins install clawhub:@guardrailbridge/guardrail-bridge
 ```
 
 ### 通过 npm 安装
 
 ```bash
-openclaw plugins install npm:guardrail-bridge
+openclaw plugins install npm:@guardrailbridge/guardrail-bridge
 ```
 
 安装或修改插件配置后，需要重启 OpenClaw gateway。
@@ -240,8 +271,14 @@ openclaw plugins install npm:guardrail-bridge
 
 ## 文档
 
-- English: [`docs/usage.md`](./docs/usage.md), [`docs/manifest-schema.md`](./docs/manifest-schema.md), [`docs/security-notes.md`](./docs/security-notes.md)
-- 中文: [`docs/usage-zh.md`](./docs/usage-zh.md), [`docs/manifest-schema-zh.md`](./docs/manifest-schema-zh.md), [`docs/security-notes-zh.md`](./docs/security-notes-zh.md)
+- English:
+  - [Usage](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/usage.md)
+  - [Manifest schema](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/manifest-schema.md)
+  - [Security notes](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/security-notes.md)
+- 中文:
+  - [使用指南](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/usage-zh.md)
+  - [Manifest schema](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/manifest-schema-zh.md)
+  - [安全说明](https://github.com/guardrail-bridge/guardrail-bridge-plugin/blob/main/docs/security-notes-zh.md)
 
 ## 许可证
 
