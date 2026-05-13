@@ -76,7 +76,7 @@
 #### 注册自定义 provider
 
 ```typescript
-import { registerHttpProvider } from "guardrail-bridge/api";
+import { registerHttpProvider } from "@guardrailbridge/guardrail-bridge/api";
 
 registerHttpProvider("my-provider", {
   async init(config) {
